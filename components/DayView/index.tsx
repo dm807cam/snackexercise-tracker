@@ -190,7 +190,6 @@ export function DayView({
           units={units}
           timeZone={timeZone}
           filterMuscle={selected}
-          onDelete={deleteEntry}
           onEdit={setEditing}
         />
       </div>
