@@ -16,6 +16,18 @@ export const DEFAULT_MODEL = "google/gemini-2.5-flash";
 // tests, without a live key or network access.
 const ENDPOINT =
   process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1/chat/completions";
+const MODELS_ENDPOINT =
+  process.env.OPENROUTER_MODELS_URL ?? "https://openrouter.ai/api/v1/models";
+
+/**
+ * Offered first in the picker. Nothing depends on this list being complete or
+ * current — it is a shortcut past 300-odd alternatives, not a whitelist.
+ */
+export const RECOMMENDED_MODEL_IDS = [
+  "google/gemini-2.5-flash",
+  "anthropic/claude-haiku-4.5",
+  "openai/gpt-5-mini",
+];
 
 export const parsedEntrySchema = z.object({
   exerciseName: z.string().min(1),
@@ -253,4 +265,94 @@ export async function suggestMuscles(options: {
 
 function truncate(value: string, max = 200): string {
   return value.length > max ? `${value.slice(0, max)}...` : value;
+}
+
+// --- model catalogue -------------------------------------------------------
+
+export interface ModelOption {
+  id: string;
+  name: string;
+  /** USD per million tokens, or null when OpenRouter does not quote a price. */
+  promptPerM: number | null;
+  completionPerM: number | null;
+  contextLength: number | null;
+}
+
+const rawModelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).optional(),
+  context_length: z.number().nullable().optional(),
+  pricing: z
+    .object({ prompt: z.string().optional(), completion: z.string().optional() })
+    .optional(),
+  supported_parameters: z.array(z.string()).optional(),
+});
+
+/**
+ * OpenRouter quotes a per-token price as a decimal string, and uses "-1" for
+ * models whose cost is only known once it has routed the request
+ * (openrouter/auto). Those are reported as unpriced rather than as a nonsense
+ * negative number.
+ */
+function perMillion(price: string | undefined): number | null {
+  if (price === undefined) return null;
+  const value = Number(price);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return value * 1_000_000;
+}
+
+/**
+ * Reduce the catalogue to the models this app can actually use.
+ *
+ * Capability is a filter rather than a warning: the parse sends
+ * `response_format: json_schema`, so a model without `structured_outputs`
+ * fails at dictation time with an unreadable response — the one moment the
+ * user is least able to do anything about it. Roughly a fifth of the
+ * catalogue is in that category.
+ *
+ * The response is also ~700KB, nearly all of it fields the picker never
+ * shows, so each record is trimmed on the server rather than sent to a phone.
+ *
+ * Exported separately from the fetch so the filtering can be tested against
+ * captured payloads without a network call.
+ */
+export function selectUsableModels(payload: unknown): ModelOption[] {
+  const envelope = z.object({ data: z.array(z.unknown()) }).safeParse(payload);
+  if (!envelope.success) return [];
+
+  const options: ModelOption[] = [];
+  for (const entry of envelope.data.data) {
+    const parsed = rawModelSchema.safeParse(entry);
+    // A single malformed record should not cost the user the whole catalogue.
+    if (!parsed.success) continue;
+
+    const model = parsed.data;
+    if (!model.supported_parameters?.includes("structured_outputs")) continue;
+
+    options.push({
+      id: model.id,
+      name: model.name ?? model.id,
+      promptPerM: perMillion(model.pricing?.prompt),
+      completionPerM: perMillion(model.pricing?.completion),
+      contextLength: model.context_length ?? null,
+    });
+  }
+
+  options.sort((a, b) => a.name.localeCompare(b.name));
+  return options;
+}
+
+/** The models OpenRouter currently offers that can honour a strict schema. */
+export async function fetchModels(): Promise<ModelOption[]> {
+  const response = await fetch(MODELS_ENDPOINT, {
+    headers: {
+      "HTTP-Referer": "https://github.com/dm807cam/snackexercise-tracker",
+      "X-Title": "Snack Exercise Tracker",
+    },
+  });
+
+  if (!response.ok) {
+    throw new OpenRouterError(`Could not list models (${response.status})`, 502);
+  }
+  return selectUsableModels(await response.json());
 }
