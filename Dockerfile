@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# ---- deps ----------------------------------------------------------------
+# ---- dependencies (all, for building) ------------------------------------
 FROM node:22-alpine AS deps
 WORKDIR /app
 # better-sqlite3 is a native module and may need to compile on this platform.
@@ -8,16 +8,31 @@ RUN apk add --no-cache libc6-compat python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# ---- migration CLI -------------------------------------------------------
+# The Prisma CLI is installed on its own rather than pulled out of the build
+# stage or taken from a full production install. Copying individual packages
+# does not work (the CLI has transitive dependencies that would go missing),
+# and a full `npm ci --omit=dev` drags in ~900MB, most of it the build-only
+# @next/swc binaries and a second copy of Next that the standalone bundle
+# already contains. This stage is the CLI and nothing else.
+FROM node:22-alpine AS migrate-cli
+WORKDIR /cli
+RUN npm init -y >/dev/null \
+ && npm install --omit=dev --ignore-scripts prisma@7.10.0
+
 # ---- build ---------------------------------------------------------------
 FROM node:22-alpine AS build
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# The build only needs a syntactically valid URL; no database is touched.
+# Only needs to be a syntactically valid URL; no database is touched here.
 ENV DATABASE_URL="file:/data/app.db"
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npx prisma generate && npm run build
+RUN npx prisma generate \
+ && npm run build \
+ # Bundle the seed to plain JS so the runtime needs no TypeScript loader.
+ && npm run build:seed
 
 # ---- runtime -------------------------------------------------------------
 FROM node:22-alpine AS runtime
@@ -30,23 +45,22 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV DATABASE_URL="file:/data/app.db"
 
-# Next.js standalone output: a self-contained server plus its runtime deps.
+# Next's standalone server, its static assets and public files.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 
-# Migrations, seed and the Prisma CLI are needed at container start, not build.
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/prisma.config.ts ./prisma.config.ts
+# Applied at container start, not at build time.
+COPY --from=build /app/prisma/schema.prisma ./prisma/schema.prisma
+COPY --from=build /app/prisma/migrations ./prisma/migrations
+COPY --from=build /app/prisma.config.mjs ./prisma.config.mjs
+COPY --from=build /app/dist/seed.mjs ./dist/seed.mjs
 COPY --from=build /app/generated ./generated
-COPY --from=build /app/lib/slug.ts ./lib/slug.ts
-COPY --from=build /app/lib/muscles.ts ./lib/muscles.ts
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
-COPY --from=build /app/node_modules/tsx ./node_modules/tsx
-COPY --from=build /app/node_modules/esbuild ./node_modules/esbuild
-COPY --from=build /app/node_modules/get-tsconfig ./node_modules/get-tsconfig
-COPY --from=build /app/node_modules/resolve-pkg-maps ./node_modules/resolve-pkg-maps
-COPY --from=build /app/node_modules/@esbuild ./node_modules/@esbuild
+
+# Overlaid on the standalone bundle's traced modules. The bundle already
+# carries everything the server needs at runtime; this adds only what the
+# migration CLI needs at start-up.
+COPY --from=migrate-cli /cli/node_modules ./node_modules
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

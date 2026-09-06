@@ -12,13 +12,17 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "build:seed": "esbuild prisma/seed.ts --bundle --platform=node --format=esm --outfile=dist/seed.mjs --packages=external"
   },
-  "prisma": { "seed": "tsx prisma/seed.ts" },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "next": "^15.5.25",
+    "prisma": "^7.10.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.10.1",
@@ -30,8 +34,8 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.25.0",
     "postcss": "^8.5.0",
-    "prisma": "^7.10.0",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

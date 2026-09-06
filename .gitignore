@@ -14,3 +14,5 @@ playwright-report/
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+e2e/e2e.db*
+dist/

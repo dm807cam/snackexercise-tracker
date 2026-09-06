@@ -141,7 +141,12 @@ function EntryRow({
           {formatTime(new Date(entry.performedAt), timeZone)}
         </time>
 
-        <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Edit ${entry.exercise.name}`}
+          className="min-w-0 flex-1 text-left"
+        >
           <span className="flex items-center gap-1.5">
             <span className="truncate font-medium">{entry.exercise.name}</span>
             {entry.source === "llm" && (

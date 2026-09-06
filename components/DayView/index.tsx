@@ -228,6 +228,7 @@ export function DayView({
 
       <Sheet open={editing !== null} title="Edit entry" onClose={() => setEditing(null)}>
         {editing && (
+          <>
           <ManualForm
             exercises={exercises}
             recentIds={recentIds}
@@ -244,6 +245,19 @@ export function DayView({
             onSubmit={saveEdit}
             busy={false}
           />
+          <button
+            type="button"
+            onClick={() => {
+              const entry = editing;
+              setEditing(null);
+              deleteEntry(entry);
+            }}
+            className="mt-2 w-full rounded-xl py-3 text-base font-medium"
+            style={{ background: "transparent", color: "var(--danger)" }}
+          >
+            Delete entry
+          </button>
+          </>
         )}
       </Sheet>
 
