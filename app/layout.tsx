@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Snack Tracker",
   description: "Track exercise snacks and see which muscles you have actually trained.",
   manifest: "/manifest.webmanifest",
+  icons: { icon: "/icon.svg", apple: "/icon-192.png" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Snacks" },
 };
 

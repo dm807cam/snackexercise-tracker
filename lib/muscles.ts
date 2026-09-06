@@ -78,22 +78,24 @@ export const MUSCLES: readonly MuscleDef[] = [
 export interface AxisDef {
   slug: AxisSlug;
   label: string;
+  /** Abbreviated form for the radar chart, where 12 full labels collide. */
+  short: string;
 }
 
 /** Order matters: this is the clockwise order of the radar spokes. */
 export const AXES: readonly AxisDef[] = [
-  { slug: "chest", label: "Chest" },
-  { slug: "shoulders", label: "Shoulders" },
-  { slug: "biceps", label: "Biceps" },
-  { slug: "triceps", label: "Triceps" },
-  { slug: "forearms", label: "Forearms" },
-  { slug: "core", label: "Core" },
-  { slug: "quads", label: "Quads" },
-  { slug: "hamstrings", label: "Hamstrings" },
-  { slug: "glutes", label: "Glutes" },
-  { slug: "calves", label: "Calves" },
-  { slug: "back", label: "Back" },
-  { slug: "traps-neck", label: "Traps & neck" },
+  { slug: "chest", label: "Chest", short: "Chest" },
+  { slug: "shoulders", label: "Shoulders", short: "Delts" },
+  { slug: "biceps", label: "Biceps", short: "Bi" },
+  { slug: "triceps", label: "Triceps", short: "Tri" },
+  { slug: "forearms", label: "Forearms", short: "Forearm" },
+  { slug: "core", label: "Core", short: "Core" },
+  { slug: "quads", label: "Quads", short: "Quads" },
+  { slug: "hamstrings", label: "Hamstrings", short: "Hams" },
+  { slug: "glutes", label: "Glutes", short: "Glutes" },
+  { slug: "calves", label: "Calves", short: "Calves" },
+  { slug: "back", label: "Back", short: "Back" },
+  { slug: "traps-neck", label: "Traps & neck", short: "Traps" },
 ] as const;
 
 const MUSCLE_BY_SLUG = new Map(MUSCLES.map((m) => [m.slug, m]));
@@ -112,6 +114,10 @@ export function muscleLabel(slug: string): string {
 
 export function axisLabel(slug: string): string {
   return AXIS_BY_SLUG.get(slug as AxisSlug)?.label ?? slug;
+}
+
+export function axisShortLabel(slug: string): string {
+  return AXIS_BY_SLUG.get(slug as AxisSlug)?.short ?? slug;
 }
 
 export function axisForMuscle(slug: string): AxisSlug | undefined {
