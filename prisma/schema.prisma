@@ -1,0 +1,77 @@
+// Snack Exercise Tracker — data model.
+//
+// The unit of logging is a SetEntry: one thing you picked up and moved, at a
+// point in time. There is deliberately no "workout" or "session" entity — the
+// whole premise is that training happens in scattered snacks, not sessions.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Exercise {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  slug      String  @unique
+  category  String  @default("other")
+  /// True for movements normally done without external load (push-ups, pull-ups).
+  /// Lets the UI stop nagging for a weight that was never going to exist.
+  bodyweight Boolean @default(false)
+  isCustom  Boolean @default(false)
+  archived  Boolean @default(false)
+
+  muscles ExerciseMuscle[]
+  entries SetEntry[]
+
+  createdAt DateTime @default(now())
+}
+
+/// How much a single set of an exercise counts toward each muscle.
+/// weight: 1.0 primary mover, 0.5 secondary, 0.25 stabiliser.
+model ExerciseMuscle {
+  exerciseId String
+  muscle     String
+  weight     Float
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@id([exerciseId, muscle])
+  @@index([muscle])
+}
+
+model SetEntry {
+  id String @id @default(cuid())
+
+  /// Full timestamp, used for chronological ordering within a day.
+  performedAt DateTime
+  /// "YYYY-MM-DD" in the configured local timezone. Denormalised so that every
+  /// day/calendar/window query is an index scan with no timezone arithmetic.
+  localDate   String
+
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  sets        Int    @default(1)
+  reps        Int?
+  weightKg    Float?
+  durationSec Int?
+  notes       String?
+
+  /// "manual" | "llm" — lets you see which entries came from dictation.
+  source String @default("manual")
+
+  createdAt DateTime @default(now())
+
+  @@index([localDate])
+  @@index([performedAt])
+  @@index([exerciseId])
+}
+
+model Setting {
+  key   String @id
+  value String
+}

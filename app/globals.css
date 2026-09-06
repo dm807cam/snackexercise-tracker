@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/*
+  Dark-first by intent: this app gets opened in a dim basement, one-handed,
+  mid-set. Light theme is supported and follows the system setting.
+*/
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-accent-400: oklch(0.78 0.15 62);
+  --color-accent-500: oklch(0.72 0.17 55);
+  --color-accent-600: oklch(0.64 0.17 50);
+}
+
+:root {
+  color-scheme: light dark;
+
+  --bg: oklch(0.98 0.004 90);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.965 0.005 90);
+  --border: oklch(0.9 0.006 90);
+  --text: oklch(0.24 0.012 60);
+  --text-dim: oklch(0.52 0.012 60);
+  --accent: oklch(0.62 0.17 50);
+  --accent-contrast: oklch(0.99 0 0);
+  --danger: oklch(0.58 0.19 25);
+
+  /* Body-map shading ramp: one hue, varying lightness and chroma, so it reads
+     as "more/less" rather than as unrelated categories. */
+  --muscle-empty: oklch(0.9 0.008 60);
+  --muscle-outline: oklch(0.78 0.01 60);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.008 60);
+    --surface: oklch(0.21 0.009 60);
+    --surface-2: oklch(0.25 0.01 60);
+    --border: oklch(0.31 0.012 60);
+    --text: oklch(0.95 0.004 90);
+    --text-dim: oklch(0.68 0.01 70);
+    --accent: oklch(0.74 0.16 58);
+    --accent-contrast: oklch(0.18 0.01 60);
+    --danger: oklch(0.65 0.19 25);
+    --muscle-empty: oklch(0.3 0.01 60);
+    --muscle-outline: oklch(0.42 0.012 60);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    /* Room for the fixed bottom nav plus the iOS home indicator. */
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    overscroll-behavior-y: none;
+  }
+
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+@layer utilities {
+  .surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .text-dim {
+    color: var(--text-dim);
+  }
+  /* Horizontal day-swiping must not fight the browser's own back gesture. */
+  .pan-y {
+    touch-action: pan-y;
+  }
+}
