@@ -52,6 +52,10 @@ docker compose up -d --build
 Then open `http://<your-host>:3000`. On a phone, use "Add to Home Screen" — it
 installs as a standalone app.
 
+If port 3000 is already taken on the host, set `APP_PORT` (in `.env`, or as a
+stack variable when deploying through Portainer) — the container always listens
+on 3000 internally, only the published port changes.
+
 Set `TZ` to your own zone in `docker-compose.yml`: it decides where one day ends
 and the next begins, so a 23:30 snack lands on the right evening. You can also
 override it later in Settings without redeploying.
