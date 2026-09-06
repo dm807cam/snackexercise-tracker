@@ -8,12 +8,7 @@ import { MUSCLES, muscleLabel } from "@/lib/muscles";
 import type { Units } from "@/lib/format";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
-
-const MODELS = [
-  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash — fast and cheap" },
-  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
-  { id: "openai/gpt-5-mini", label: "GPT-5 mini" },
-];
+import { ModelPicker } from "./ModelPicker";
 
 export function SettingsView({
   initial,
@@ -159,23 +154,17 @@ export function SettingsView({
           </div>
         </Field>
 
-        <Field label="Model">
-          <select
+        <Field
+          label="Model"
+          hint="Only models that support structured output are listed — the rest cannot return parseable entries."
+        >
+          <ModelPicker
             value={model}
-            onChange={(e) => {
-              setModel(e.target.value);
-              save({ openrouterModel: e.target.value });
+            onChange={(id) => {
+              setModel(id);
+              save({ openrouterModel: id });
             }}
-            className="w-full rounded-lg px-3 py-2.5 text-base"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-          >
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-            {!MODELS.some((m) => m.id === model) && <option value={model}>{model}</option>}
-          </select>
+          />
         </Field>
       </Section>
 
