@@ -121,57 +121,69 @@ export function monthOf(value: LocalDate): number {
 }
 
 /**
- * Display formatting is always given an explicit timezone.
+ * Display formatting.
  *
- * Day bucketing happens on the server in the configured zone, so formatting
- * times in whatever zone the *browser* happens to be in would both display the
- * wrong clock time and desynchronise server and client rendering (a React
- * hydration mismatch). Passing the zone explicitly keeps the two in agreement
- * regardless of where the phone thinks it is.
+ * Labels are assembled from fixed tables rather than Intl's locale patterns.
+ * Node and the browser can ship different ICU data — en-GB renders the same
+ * date as "Sun 6 Sept" in one and "Sun, 6 Sept" in the other — which silently
+ * breaks React hydration. Fixed tables render identically everywhere.
+ *
+ * Intl is still used where it does real work: converting an instant into the
+ * app's configured timezone. Even there the pieces are read via formatToParts
+ * and assembled here, so the punctuation is ours and not the locale's.
  */
-export type TimeZone = string | undefined;
 
-function formatter(options: Intl.DateTimeFormatOptions, timeZone: TimeZone) {
-  return new Intl.DateTimeFormat("en-GB", { ...options, timeZone });
-}
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+const MONTHS_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
 
 /** "Sun 6 Sep", or "Sun 6 Sep 2025" when the date is not in the current year. */
-export function formatDayLabel(value: LocalDate, timeZone?: TimeZone): string {
+export function formatDayLabel(value: LocalDate, currentYear?: number): string {
   const d = parseLocalDate(value);
-  const currentYear = Number(value.slice(0, 4)) === new Date().getFullYear();
-  return formatter(
-    {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      ...(currentYear ? {} : { year: "numeric" }),
-      // The label describes a calendar date, not an instant: forcing a zone
-      // here could shift it across midnight. parseLocalDate already anchors
-      // at local noon, so read it back in the same local frame.
-    },
-    undefined,
-  ).format(d);
+  const year = d.getFullYear();
+  const label = `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  const reference = currentYear ?? new Date().getFullYear();
+  return year === reference ? label : `${label} ${year}`;
 }
 
 export function formatMonthLabel(value: LocalDate): string {
-  return formatter({ month: "long", year: "numeric" }, undefined).format(parseLocalDate(value));
+  const d = parseLocalDate(value);
+  return `${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 /** Clock time of an instant, in the app's configured zone. */
-export function formatTime(date: Date, timeZone?: TimeZone): string {
-  return formatter({ hour: "2-digit", minute: "2-digit", hour12: false }, timeZone).format(date);
+export function formatTime(date: Date, timeZone?: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+  // "24:05" is a legal ICU rendering of midnight; the app always shows 00.
+  return `${hour === "24" ? "00" : hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
 }
 
 /** "YYYY-MM-DD" for an instant as seen in the given zone. */
-export function toLocalDateInZone(date: Date, timeZone?: TimeZone): LocalDate {
+export function toLocalDateInZone(date: Date, timeZone?: string): LocalDate {
   if (!timeZone) return toLocalDate(date);
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
-  return parts; // en-CA already yields YYYY-MM-DD
+  }).formatToParts(date);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 export const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"] as const;

@@ -12,7 +12,10 @@ import { z } from "zod";
 import { MUSCLE_SLUGS } from "./muscles";
 
 export const DEFAULT_MODEL = "google/gemini-2.5-flash";
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+// Overridable so the voice path can be exercised end to end against a stub in
+// tests, without a live key or network access.
+const ENDPOINT =
+  process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 
 export const parsedEntrySchema = z.object({
   exerciseName: z.string().min(1),

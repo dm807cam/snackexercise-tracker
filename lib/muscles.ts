@@ -72,7 +72,7 @@ export const MUSCLES: readonly MuscleDef[] = [
   { slug: "hamstrings", label: "Hamstrings", views: ["back"], axis: "hamstrings" },
   { slug: "adductors", label: "Adductors", views: ["front"], axis: "quads" },
   { slug: "calves", label: "Calves", views: ["front", "back"], axis: "calves" },
-  { slug: "neck", label: "Neck", views: ["front", "back"], axis: "traps-neck" },
+  { slug: "neck", label: "Neck", views: ["front"], axis: "traps-neck" },
 ] as const;
 
 export interface AxisDef {

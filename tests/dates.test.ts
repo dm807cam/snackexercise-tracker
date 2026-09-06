@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  formatDayLabel,
+  formatMonthLabel,
+  formatTime,
+  toLocalDateInZone,
   addMonths,
   daysBetween,
   enumerateDates,
@@ -124,5 +128,38 @@ describe("monthGrid", () => {
     const weeks = monthGrid("2024-02-10");
     expect(weeks.flat()).toContain("2024-02-29");
     expect(weeks.every((w) => w.length === 7)).toBe(true);
+  });
+});
+
+describe("label formatting", () => {
+  it("renders day labels from fixed tables, not locale patterns", () => {
+    // Node and the browser ship different ICU data; en-GB renders this as
+    // "Sun 6 Sept" in one and "Sun, 6 Sept" in the other, which breaks
+    // hydration. These must be byte-stable.
+    expect(formatDayLabel("2026-09-06", 2026)).toBe("Sun 6 Sep");
+    expect(formatDayLabel("2026-01-01", 2026)).toBe("Thu 1 Jan");
+    expect(formatDayLabel("2025-12-31", 2026)).toBe("Wed 31 Dec 2025");
+    expect(formatMonthLabel("2026-09-06")).toBe("September 2026");
+  });
+
+  it("formats clock times in the requested zone", () => {
+    // 05:12 UTC is 07:12 in Berlin.
+    const instant = new Date("2026-09-06T05:12:00Z");
+    expect(formatTime(instant, "Europe/Berlin")).toBe("07:12");
+    expect(formatTime(instant, "UTC")).toBe("05:12");
+  });
+
+  it("renders midnight as 00:00 rather than ICU's 24:00", () => {
+    expect(formatTime(new Date("2026-09-06T00:00:00Z"), "UTC")).toBe("00:00");
+  });
+});
+
+describe("toLocalDateInZone", () => {
+  it("buckets an instant into the day it falls on in that zone", () => {
+    // 22:30 UTC is already the next day in Berlin.
+    const instant = new Date("2026-09-06T22:30:00Z");
+    expect(toLocalDateInZone(instant, "Europe/Berlin")).toBe("2026-09-07");
+    expect(toLocalDateInZone(instant, "UTC")).toBe("2026-09-06");
+    expect(toLocalDateInZone(instant, "America/New_York")).toBe("2026-09-06");
   });
 });
