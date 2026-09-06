@@ -5,7 +5,8 @@ services:
     container_name: snackexercise-tracker
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Host port only. Override with APP_PORT if 3000 is taken.
+      - "${APP_PORT:-3000}:3000"
     environment:
       DATABASE_URL: "file:/data/app.db"
       # Day boundaries follow this zone. Set it to yours.
