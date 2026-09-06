@@ -62,4 +62,5 @@ export const settingsSchema = z.object({
   openrouterModel: z.string().max(120).optional(),
   units: z.enum(["kg", "lb"]).optional(),
   bodyweightKg: z.string().max(10).optional(),
+  timezone: z.string().max(64).optional(),
 });

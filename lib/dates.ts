@@ -120,33 +120,58 @@ export function monthOf(value: LocalDate): number {
   return parseLocalDate(value).getMonth();
 }
 
-const DAY_LABEL = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-});
-const DAY_LABEL_WITH_YEAR = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-const MONTH_LABEL = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
-const TIME_LABEL = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+/**
+ * Display formatting is always given an explicit timezone.
+ *
+ * Day bucketing happens on the server in the configured zone, so formatting
+ * times in whatever zone the *browser* happens to be in would both display the
+ * wrong clock time and desynchronise server and client rendering (a React
+ * hydration mismatch). Passing the zone explicitly keeps the two in agreement
+ * regardless of where the phone thinks it is.
+ */
+export type TimeZone = string | undefined;
+
+function formatter(options: Intl.DateTimeFormatOptions, timeZone: TimeZone) {
+  return new Intl.DateTimeFormat("en-GB", { ...options, timeZone });
+}
 
 /** "Sun 6 Sep", or "Sun 6 Sep 2025" when the date is not in the current year. */
-export function formatDayLabel(value: LocalDate): string {
+export function formatDayLabel(value: LocalDate, timeZone?: TimeZone): string {
   const d = parseLocalDate(value);
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return (sameYear ? DAY_LABEL : DAY_LABEL_WITH_YEAR).format(d);
+  const currentYear = Number(value.slice(0, 4)) === new Date().getFullYear();
+  return formatter(
+    {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      ...(currentYear ? {} : { year: "numeric" }),
+      // The label describes a calendar date, not an instant: forcing a zone
+      // here could shift it across midnight. parseLocalDate already anchors
+      // at local noon, so read it back in the same local frame.
+    },
+    undefined,
+  ).format(d);
 }
 
 export function formatMonthLabel(value: LocalDate): string {
-  return MONTH_LABEL.format(parseLocalDate(value));
+  return formatter({ month: "long", year: "numeric" }, undefined).format(parseLocalDate(value));
 }
 
-export function formatTime(date: Date): string {
-  return TIME_LABEL.format(date);
+/** Clock time of an instant, in the app's configured zone. */
+export function formatTime(date: Date, timeZone?: TimeZone): string {
+  return formatter({ hour: "2-digit", minute: "2-digit", hour12: false }, timeZone).format(date);
+}
+
+/** "YYYY-MM-DD" for an instant as seen in the given zone. */
+export function toLocalDateInZone(date: Date, timeZone?: TimeZone): LocalDate {
+  if (!timeZone) return toLocalDate(date);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+  return parts; // en-CA already yields YYYY-MM-DD
 }
 
 export const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"] as const;

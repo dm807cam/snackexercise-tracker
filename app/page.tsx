@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
-import { todayLocalDate } from "@/lib/dates";
+import { getAppConfig } from "@/lib/app-config";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  redirect(`/day/${todayLocalDate()}`);
+export default async function Home() {
+  const { today } = await getAppConfig();
+  redirect(`/day/${today}`);
 }

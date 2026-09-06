@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { entryUpdateSchema } from "@/lib/validation";
-import { toLocalDate } from "@/lib/dates";
+import { toLocalDateInZone } from "@/lib/dates";
+import { getAppConfig } from "@/lib/app-config";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (!existing) throw new ApiError("Entry not found", 404);
 
     const performedAt = patch.performedAt ? new Date(patch.performedAt) : undefined;
+    const { timeZone } = await getAppConfig();
 
     return {
       entry: await prisma.setEntry.update({
@@ -26,7 +28,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
           ...patch,
           performedAt,
           // Moving an entry's time can move it to a different day.
-          localDate: performedAt ? toLocalDate(performedAt) : undefined,
+          localDate: performedAt ? toLocalDateInZone(performedAt, timeZone) : undefined,
         },
         include: {
           exercise: {
