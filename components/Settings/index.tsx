@@ -78,7 +78,7 @@ export function SettingsView({
                   setUnits(value);
                   save({ units: value });
                 }}
-                className="rounded-md py-2 text-sm font-medium uppercase"
+                className="tap rounded-md py-2 text-sm font-medium uppercase"
                 style={{
                   background: units === value ? "var(--surface)" : "transparent",
                   color: units === value ? "var(--text)" : "var(--text-dim)",
@@ -99,7 +99,7 @@ export function SettingsView({
             onChange={(e) => setTimezone(e.target.value)}
             onBlur={() => timezone !== initial.timezone && save({ timezone })}
             placeholder="Europe/Berlin"
-            className="w-full rounded-lg px-3 py-2.5 text-base"
+            className="w-full rounded-lg px-3 py-3 text-base"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
         </Field>
@@ -120,7 +120,7 @@ export function SettingsView({
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={hasKey ? "••••••••••••" : "sk-or-v1-..."}
             autoComplete="off"
-            className="w-full rounded-lg px-3 py-2.5 text-base"
+            className="w-full rounded-lg px-3 py-3 text-base"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
           <div className="mt-2 flex gap-2">
@@ -132,7 +132,7 @@ export function SettingsView({
                 setApiKey("");
                 setHasKey(true);
               }}
-              className="flex-1 rounded-lg py-2 text-sm font-semibold disabled:opacity-40"
+              className="tap flex-1 rounded-lg py-2 text-sm font-semibold disabled:opacity-40"
               style={{ background: "var(--accent)", color: "var(--accent-contrast)" }}
             >
               Save key
@@ -145,7 +145,7 @@ export function SettingsView({
                   await save({ openrouterKey: "" });
                   setHasKey(false);
                 }}
-                className="rounded-lg px-3 py-2 text-sm"
+                className="tap rounded-lg px-3 py-2 text-sm"
                 style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
               >
                 Clear
@@ -174,13 +174,13 @@ export function SettingsView({
             ? `${custom.length} added by you. Tap any movement to adjust which muscles it counts toward.`
             : "Tap a movement to adjust which muscles it counts toward."}
         </p>
-        <div className="flex max-h-56 flex-wrap gap-1.5 overflow-y-auto">
+        <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto">
           {exercises.map((exercise) => (
             <button
               key={exercise.id}
               type="button"
               onClick={() => setEditing(exercise)}
-              className="rounded-full px-3 py-1.5 text-sm"
+              className="tap rounded-full px-3 py-2 text-sm"
               style={{
                 background: "var(--surface-2)",
                 border: `1px solid ${exercise.isCustom ? "var(--accent)" : "var(--border)"}`,
@@ -201,7 +201,7 @@ export function SettingsView({
           <a
             href="/api/export"
             download
-            className="block rounded-lg py-2.5 text-center text-sm font-semibold"
+            className="block rounded-lg py-3 text-center text-sm font-semibold"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           >
             Export everything (JSON)
@@ -210,7 +210,7 @@ export function SettingsView({
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy}
-            className="rounded-lg py-2.5 text-sm font-semibold disabled:opacity-40"
+            className="rounded-lg py-3 text-sm font-semibold disabled:opacity-40"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           >
             Import from a backup
@@ -295,7 +295,7 @@ function MuscleEditor({
       <p className="mb-3 text-xs text-dim">
         How much one set counts toward each muscle: primary, secondary, or stabiliser.
       </p>
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-2">
         {MUSCLES.map((muscle) => {
           const value = weights[muscle.slug] ?? 0;
           return (
@@ -345,7 +345,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="mb-6">
       <h2 className="mb-2 text-sm font-semibold">{title}</h2>
-      <div className="surface flex flex-col gap-4 rounded-xl p-3">{children}</div>
+      <div className="surface flex flex-col gap-4 rounded-xl p-4">{children}</div>
     </section>
   );
 }
@@ -361,9 +361,9 @@ function Field({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-sm font-medium">{label}</p>
+      <p className="mb-2 text-sm font-medium">{label}</p>
       {children}
-      {hint && <p className="mt-1.5 text-xs text-dim">{hint}</p>}
+      {hint && <p className="mt-2 text-xs text-dim">{hint}</p>}
     </div>
   );
 }

@@ -82,7 +82,7 @@ export function ManualForm({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <label className="mb-1.5 block text-sm font-medium" htmlFor="exercise-search">
+        <label className="mb-2 block text-sm font-medium" htmlFor="exercise-search">
           Exercise
         </label>
         <input
@@ -91,10 +91,10 @@ export function ManualForm({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={selected ? selected.name : "Search movements..."}
-          className="w-full rounded-lg px-3 py-2.5 text-base"
+          className="w-full rounded-lg px-3 py-3 text-base"
           style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
         />
-        <div className="mt-2 flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
+        <div className="mt-2 flex max-h-44 flex-wrap gap-2 overflow-y-auto">
           {ordered.map((exercise) => {
             const active = exercise.id === exerciseId;
             return (
@@ -105,7 +105,7 @@ export function ManualForm({
                   setExerciseId(exercise.id);
                   setQuery("");
                 }}
-                className="rounded-full px-3 py-1.5 text-sm transition-colors"
+                className="rounded-full px-3 py-2 text-sm transition-colors"
                 style={{
                   background: active ? "var(--accent)" : "var(--surface-2)",
                   color: active ? "var(--accent-contrast)" : "var(--text)",
@@ -147,7 +147,7 @@ export function ManualForm({
           min={0}
         />
         <div>
-          <label className="mb-1.5 block text-sm font-medium" htmlFor="entry-notes">
+          <label className="mb-2 block text-sm font-medium" htmlFor="entry-notes">
             Note
           </label>
           <input
@@ -155,7 +155,7 @@ export function ManualForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="optional"
-            className="w-full rounded-lg px-3 py-2.5 text-base"
+            className="w-full rounded-lg px-3 py-3 text-base"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
         </div>
@@ -196,7 +196,7 @@ function NumberField({
   const id = `field-${label.replace(/\W+/g, "-").toLowerCase()}`;
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium" htmlFor={id}>
+      <label className="mb-2 block text-sm font-medium" htmlFor={id}>
         {label}
       </label>
       <input
@@ -208,7 +208,7 @@ function NumberField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg px-3 py-2.5 text-base tabular-nums"
+        className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
         style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
       />
     </div>

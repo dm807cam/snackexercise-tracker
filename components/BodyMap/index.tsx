@@ -96,7 +96,7 @@ function Figure({
           />
         ))}
       </svg>
-      <figcaption className="mt-0.5 text-center text-[11px] uppercase tracking-wide text-dim">
+      <figcaption className="mt-1 text-center text-[11px] uppercase tracking-wide text-dim">
         {view}
       </figcaption>
     </figure>

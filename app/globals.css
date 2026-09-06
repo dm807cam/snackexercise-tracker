@@ -79,4 +79,13 @@
   .pan-y {
     touch-action: pan-y;
   }
+  /*
+    Apple's minimum comfortable hit target is 44x44pt. Icon-only controls are
+    drawn smaller than that on purpose — a 44px trash can would dominate a
+    row — so the target is grown here rather than the glyph.
+  */
+  .tap {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

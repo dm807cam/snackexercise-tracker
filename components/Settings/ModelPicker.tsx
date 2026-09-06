@@ -77,7 +77,7 @@ export function ModelPicker({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left"
+        className="tap flex w-full items-center justify-between rounded-lg px-3 py-3 text-left"
         style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
       >
         <span className="min-w-0">
@@ -91,7 +91,7 @@ export function ModelPicker({
       </button>
 
       {missing && (
-        <p className="mt-1.5 text-xs" style={{ color: "var(--accent)" }}>
+        <p className="mt-2 text-xs" style={{ color: "var(--accent)" }}>
           OpenRouter no longer lists this model for structured output. Pick another, or voice
           entry will fail.
         </p>
@@ -102,7 +102,7 @@ export function ModelPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search models..."
-          className="mb-3 w-full rounded-lg px-3 py-2.5 text-base"
+          className="mb-3 w-full rounded-lg px-3 py-3 text-base"
           style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
         />
 
@@ -135,7 +135,7 @@ export function ModelPicker({
                       setOpen(false);
                       setQuery("");
                     }}
-                    className="w-full rounded-lg px-3 py-2 text-left"
+                    className="tap w-full rounded-lg px-3 py-2 text-left"
                     style={{
                       background: model.id === value ? "var(--surface-2)" : "transparent",
                       border: `1px solid ${model.id === value ? "var(--accent)" : "transparent"}`,
@@ -175,7 +175,7 @@ export function ModelPicker({
                   setOpen(false);
                   setQuery("");
                 }}
-                className="mt-2 w-full rounded-lg px-3 py-2.5 text-left text-sm"
+                className="tap mt-2 w-full rounded-lg px-3 py-3 text-left text-sm"
                 style={{ background: "var(--surface-2)", border: "1px dashed var(--border)" }}
               >
                 Use <span className="font-medium">{query.trim()}</span> as a model id

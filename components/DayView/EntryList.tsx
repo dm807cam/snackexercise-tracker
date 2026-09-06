@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useState } from "react";
 import { formatTime } from "@/lib/dates";
 import { formatEntryDetail, type Units } from "@/lib/format";
 import { muscleLabel, type MuscleSlug } from "@/lib/muscles";
@@ -22,14 +21,12 @@ export function EntryList({
   units,
   timeZone,
   filterMuscle,
-  onDelete,
   onEdit,
 }: {
   entries: DayEntry[];
   units: Units;
   timeZone: string;
   filterMuscle: MuscleSlug | null;
-  onDelete: (entry: DayEntry) => void;
   onEdit: (entry: DayEntry) => void;
 }) {
   const visible = filterMuscle
@@ -62,7 +59,6 @@ export function EntryList({
           entry={entry}
           units={units}
           timeZone={timeZone}
-          onDelete={() => onDelete(entry)}
           onEdit={() => onEdit(entry)}
         />
       ))}
@@ -71,68 +67,28 @@ export function EntryList({
 }
 
 /**
- * Swipe an entry left to reveal delete. The row is also a button that opens the
- * edit sheet, so nothing here depends on a gesture a desktop browser lacks.
+ * The whole row opens the edit sheet, which is the only place an entry can be
+ * deleted. Nothing here removes an entry in one action: a mis-tap in the list
+ * costs a sheet you close again, not a training record.
  */
 function EntryRow({
   entry,
   units,
   timeZone,
-  onDelete,
   onEdit,
 }: {
   entry: DayEntry;
   units: Units;
   timeZone: string;
-  onDelete: () => void;
   onEdit: () => void;
 }) {
-  const [offset, setOffset] = useState(0);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const axis = useRef<"undecided" | "horizontal" | "vertical">("undecided");
-
-  const REVEAL = 88;
-
   return (
-    <li className="relative overflow-hidden rounded-xl">
+    <li>
       <button
         type="button"
-        onClick={onDelete}
-        aria-label={`Delete ${entry.exercise.name}`}
-        className="absolute inset-y-0 right-0 flex w-[88px] items-center justify-center rounded-r-xl text-sm font-medium"
-        style={{ background: "var(--danger)", color: "white" }}
-        tabIndex={offset < -20 ? 0 : -1}
-      >
-        Delete
-      </button>
-
-      <div
-        className="surface relative flex items-center gap-3 rounded-xl px-3 py-2.5"
-        style={{
-          transform: `translateX(${offset}px)`,
-          transition: start.current ? "none" : "transform 200ms ease",
-          touchAction: "pan-y",
-        }}
-        onTouchStart={(e) => {
-          start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-          axis.current = "undecided";
-        }}
-        onTouchMove={(e) => {
-          if (!start.current) return;
-          const dx = e.touches[0].clientX - start.current.x;
-          const dy = e.touches[0].clientY - start.current.y;
-          if (axis.current === "undecided") {
-            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-            axis.current = Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
-          }
-          if (axis.current !== "horizontal") return;
-          // Only leftward swipes reveal anything; clamp so it can't overshoot.
-          setOffset(Math.max(-REVEAL, Math.min(0, dx + (offset < 0 ? -REVEAL : 0))));
-        }}
-        onTouchEnd={() => {
-          setOffset((current) => (current < -REVEAL / 2 ? -REVEAL : 0));
-          start.current = null;
-        }}
+        onClick={onEdit}
+        aria-label={`Edit ${entry.exercise.name}`}
+        className="surface flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left"
       >
         <time
           className="w-11 shrink-0 text-xs tabular-nums text-dim"
@@ -141,13 +97,8 @@ function EntryRow({
           {formatTime(new Date(entry.performedAt), timeZone)}
         </time>
 
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={`Edit ${entry.exercise.name}`}
-          className="min-w-0 flex-1 text-left"
-        >
-          <span className="flex items-center gap-1.5">
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
             <span className="truncate font-medium">{entry.exercise.name}</span>
             {entry.source === "llm" && (
               <span title="Added by voice" aria-label="Added by voice" className="shrink-0 text-dim">
@@ -162,20 +113,24 @@ function EntryRow({
             {formatEntryDetail(entry, units)}
             {entry.notes ? ` · ${entry.notes}` : ""}
           </span>
-        </button>
+        </span>
 
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label={`Delete ${entry.exercise.name}`}
-          className="hidden h-8 w-8 shrink-0 place-items-center rounded-full sm:grid"
-          style={{ color: "var(--text-dim)" }}
+        {/* Apple's disclosure chevron: this cell opens something. */}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 text-dim"
+          aria-hidden
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-            <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
-          </svg>
-        </button>
-      </div>
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
     </li>
   );
 }

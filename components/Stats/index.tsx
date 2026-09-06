@@ -83,7 +83,7 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
             aria-selected={windowDays === value}
             type="button"
             onClick={() => setWindowDays(value)}
-            className="rounded-md py-2 text-sm font-medium transition-colors"
+            className="tap rounded-md py-2 text-sm font-medium transition-colors"
             style={{
               background: windowDays === value ? "var(--surface)" : "transparent",
               color: windowDays === value ? "var(--text)" : "var(--text-dim)",
@@ -126,7 +126,7 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
             <p className="mb-2 text-xs text-dim">
               Longest since you last trained these — the point of tracking snacks.
             </p>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col gap-2">
               {neglected.slice(0, 6).map((stat) => (
                 <li
                   key={stat.axis}
@@ -200,9 +200,9 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="surface rounded-lg px-3 py-2.5 text-center">
+    <div className="surface rounded-lg px-3 py-3 text-center">
       <dt className="text-[11px] uppercase tracking-wide text-dim">{label}</dt>
-      <dd className="mt-0.5 text-base font-semibold tabular-nums">{value}</dd>
+      <dd className="mt-1 text-base font-semibold tabular-nums">{value}</dd>
     </div>
   );
 }

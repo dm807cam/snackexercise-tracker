@@ -69,7 +69,7 @@ export function QuickAdd({
             aria-selected={tab === value}
             type="button"
             onClick={() => setTab(value)}
-            className="rounded-md py-2 text-sm font-medium capitalize transition-colors"
+            className="tap rounded-md py-2 text-sm font-medium capitalize transition-colors"
             style={{
               background: tab === value ? "var(--surface)" : "transparent",
               color: tab === value ? "var(--text)" : "var(--text-dim)",
