@@ -190,7 +190,17 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
                   key={stat.axis}
                   className="surface flex items-center justify-between rounded-lg px-3 py-2 text-sm"
                 >
-                  <span>{axisLabel(stat.axis)}</span>
+                  {/* Matching the cardio row's dot: without one on every row the
+                      cardio dot reads as decoration rather than as "this row is
+                      the other quality". */}
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: "var(--strength)" }}
+                    />
+                    {axisLabel(stat.axis)}
+                  </span>
                   <span className="tabular-nums text-dim">
                     {stat.daysSinceTrained === null
                       ? "never"

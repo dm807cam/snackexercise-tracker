@@ -26,7 +26,6 @@ import {
   muscleCardioLoad,
 } from "./scoring";
 import {
-  CARDIO_TARGET_MET_MIN_PER_WEEK,
   DEFAULT_STEP_BASELINE,
   entryMetMinutes,
   impliedStepsFromEntries,
@@ -35,11 +34,7 @@ import {
   type StepSettings,
   type StepsMode,
 } from "./cardio";
-import {
-  buildBalance,
-  effectiveSetEquivalents,
-  STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK,
-} from "./balance";
+import { buildBalance, effectiveSetEquivalents } from "./balance";
 import {
   DEFAULT_ACTIVE_WINDOW,
   daySpacing,
@@ -150,29 +145,44 @@ export async function getActiveWindow(): Promise<ActiveWindow> {
   return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
 }
 
+/** A day's training, split by quality and totalled. All on the effective-set scale. */
+export interface DayLoad {
+  /** Effective sets of resistance work. */
+  strength: number;
+  /** The day's MET-minutes, carried onto the effective-set scale. */
+  cardio: number;
+  /** The two added — the day's whole dose, and what streaks and totals count. */
+  total: number;
+}
+
 /**
- * Per-day training load across a range — powers the calendar's intensity wash.
+ * Per-day training load across a range — powers the calendar.
  *
- * Effective sets alone would render a 10 km run as an empty square, so this is
- * the COMBINED dose: strength and cardio each expressed as a fraction of their
- * own weekly guideline, added, and scaled back into effective-set units so the
- * calendar's existing reference and legend keep their meaning. Sharing the
- * currency with the balance marker is the point — the calendar and the marker
- * can then never disagree about what a day contained.
+ * Effective sets alone would render a 10 km run as an empty square, so both
+ * qualities are here: strength as it stands, cardio converted by the guideline
+ * exchange rate in lib/balance.ts. Sharing that currency with the balance
+ * marker and the radar is the point — no two views of the app can then
+ * disagree about what a run was worth.
+ *
+ * They are returned SEPARATELY as well as summed, because the calendar colours
+ * them separately: a day is washed in the strength colour and ringed in the
+ * cardio one, the same convention the body map uses. `total` is what streaks,
+ * active days and month totals count, and is exactly the number this function
+ * used to return on its own.
  *
  * Returns only days that carry something.
  */
 export async function getDailyLoad(
   start: LocalDate,
   end: LocalDate,
-): Promise<Record<LocalDate, number>> {
+): Promise<Record<LocalDate, DayLoad>> {
   const [entries, stepsByDate, stepSettings] = await Promise.all([
     getEntriesInRange(start, end),
     getStepsInRange(start, end),
     getStepSettings(),
   ]);
 
-  const byDay: Record<string, number> = {};
+  const byDay: Record<string, DayLoad> = {};
   const entriesByDate = new Map<string, EntryWithExercise[]>();
 
   for (const entry of entries) {
@@ -199,12 +209,16 @@ export async function getDailyLoad(
 
     // A day at the weekly guideline pace for both qualities scores the same as
     // a day of (target / 7) effective sets did before cardio existed.
-    const dose =
-      effectiveSets / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK +
-      metMinutes / CARDIO_TARGET_MET_MIN_PER_WEEK;
+    const cardio = effectiveSetEquivalents(metMinutes);
+    const total = effectiveSets + cardio;
 
-    const scaled = dose * STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK;
-    if (scaled > 0) byDay[date] = scaled;
+    if (total > 0) {
+      byDay[date] = {
+        strength: round(effectiveSets),
+        cardio: round(cardio),
+        total: round(total),
+      };
+    }
   }
 
   return byDay;
@@ -435,3 +449,7 @@ export async function loadStats(
 
 export { addDays, daysBetween, enumerateDates, todayLocalDate };
 export { DEFAULT_STEP_BASELINE };
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}

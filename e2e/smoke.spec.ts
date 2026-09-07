@@ -143,6 +143,35 @@ test.describe("cardio and steps", () => {
     await expect(page.getByText("Cardio", { exact: true }).first()).toBeVisible();
   });
 
+  test("the calendar names both qualities, never colour alone", async ({ page }) => {
+    // Seeded through the API rather than the UI: this test is about how the
+    // calendar reports a day, not about the logging flow, which is covered
+    // above.
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    const { exercises } = await (await page.request.get("/api/exercises")).json();
+    const id = (name: string) =>
+      exercises.find((e: { name: string }) => e.name === name)?.id as string;
+
+    await page.request.post("/api/entries", {
+      data: { exerciseId: id("Run"), performedTime: "07:00", localDate: today, sets: 1, distanceM: 5000, durationSec: 1650 },
+    });
+    // Deliberately not a movement another test filters the day list on: these
+    // entries outlive this test, and two matching rows would break the strict
+    // locator in the retiming test below.
+    await page.request.post("/api/entries", {
+      data: { exerciseId: id("Bench press"), performedTime: "17:00", localDate: today, sets: 4, reps: 10 },
+    });
+
+    await page.goto("/calendar");
+    // A day that carried both is washed in the strength colour and ringed in
+    // the cardio one; the label has to say so for anyone who cannot see that.
+    await expect(
+      page.getByRole("link", { name: new RegExp(`^${today}: .*effective sets.*cardio MET-minutes`) }),
+    ).toBeVisible();
+  });
+
   test("the balance marker appears on stats", async ({ page }) => {
     await page.goto("/stats");
 

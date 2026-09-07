@@ -68,6 +68,28 @@ export function BodyMap({
           <span className="text-xs text-dim">Tap a muscle for detail</span>
         )}
       </div>
+
+      {/* Named, because a fill and an outline in two colours is not
+          self-explanatory, and the same two colours mean the same two things
+          on the radar, the calendar and the balance bar. */}
+      <div className="flex items-center justify-center gap-4 text-[11px] text-dim">
+        <span className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 rounded-[3px]"
+            style={{ background: "var(--strength)" }}
+          />
+          Strength
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 rounded-[3px]"
+            style={{ border: "1.5px solid var(--cardio)" }}
+          />
+          Cardio
+        </span>
+      </div>
     </div>
   );
 }
@@ -195,7 +217,11 @@ function Region({
         <polygon
           key={`fill-${i}`}
           points={points}
-          fill="var(--accent)"
+          // Strength fills, in the strength colour. This used to be --accent,
+          // which is the same orange as --cardio — so the resistance fill and
+          // the cardio outline were the same colour, and the figure could not
+          // say which quality had loaded a muscle.
+          fill="var(--strength)"
           fillOpacity={intensity}
           // Cardio is an outline in its own colour, never a fill: the two
           // channels must stay distinguishable at a glance, and adding them

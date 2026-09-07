@@ -16,14 +16,16 @@ Self-hosted, single container, SQLite on a volume. No account, no cloud.
 ## What it does
 
 **Today** — a bar at the top proposing what to train next and why, then front
-and back body diagrams shaded by what you've trained, a timeline of how the
+and back body diagrams filled in blue for what you've lifted and outlined in
+orange for what you've run, a timeline of how the
 day's snacks were spread, and a chronological list of the day's entries.
 Chevrons top-left or a horizontal swipe move between days. Tap a muscle to
 filter the list to it; tap the suggestion to log it with the movement already
 chosen.
 
-**Calendar** — a month at a glance, each day shaded by how much work it carried,
-plus active days, current streak and longest gap. Tap any day to open it.
+**Calendar** — a month at a glance, each day washed blue by the strength it
+carried and ringed orange if it carried cardio, plus active days, current
+streak and longest gap. Tap any day to open it.
 
 **Stats** — a strength/cardio balance marker over the window, then a 12-axis
 radar of muscle coverage over the last 7 / 30 / 60 / 90 / 180 days carrying two
@@ -81,9 +83,26 @@ Cardio stays out of the effective-set total, but not out of sight. It travels as
 a second channel in the same per-muscle shape — an outline on the body map, its
 own orange line on the radar — so a 10 km run shows up on the calves it actually
 loaded. The two are drawn separately and never added: the radar puts them on one
-radial scale using the same exchange rate the calendar already uses (600
-MET-minutes and 60 effective sets are each one guideline-week, so 10 MET-minutes
-reach as far as one effective set).
+radial scale using the same exchange rate the calendar uses (600 MET-minutes and
+60 effective sets are each one guideline-week, so 10 MET-minutes reach as far as
+one effective set).
+
+### One colour, one quality
+
+**Blue is strength. Orange is cardio. Teal is timing.** Everywhere — the body
+map, the radar, the calendar, the balance bar, the per-axis bars, the "needs
+attention" dots. Learn the two colours once and every chart in the app reads the
+same way.
+
+`--accent` is the app's *interaction* colour — buttons, the log button, the
+active nav tab, a selected chip — and never encodes a quantity. It happens to be
+the same orange as cardio, on purpose, so the cardio end of the balance gradient
+stays continuous with the app's identity; the rule that nothing data-shaped
+wears it is what keeps that from being a lie. [ADR
+0013](./docs/adr/0013-one-colour-one-quality.md).
+
+Nothing is carried by colour alone: every one of those marks is named in a
+legend, a key or an `aria-label`.
 
 ### Spreading it out
 
