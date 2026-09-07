@@ -1,0 +1,134 @@
+# The gate this repository did not have.
+#
+# Two jobs run in parallel because they answer different questions: whether the
+# code is correct, and whether the thing you actually deploy still builds and
+# boots. A green tick on the first tells you nothing about the second — the
+# container is the deliverable here, not the source tree.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes the one before it; nobody needs the results of a commit
+# that has already been replaced. `main` is excluded so merges always leave a
+# complete record.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Typecheck, unit tests, build, browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Only needs to be a syntactically valid URL — nothing here touches a real
+      # database except the e2e run, which points at its own file.
+      DATABASE_URL: file:./ci.db
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Dockerfile's node:22-alpine, so CI cannot pass on a
+          # runtime the container never uses.
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # generated/ is gitignored, so the Prisma client does not exist in a fresh
+      # checkout and every step below would fail to resolve its types.
+      - name: Generate the Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Bundled separately from the app and only ever exercised inside the
+      # container, so a break here would otherwise surface at deploy time.
+      - name: Build the seed bundle
+        run: npm run build:seed
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Reuses the build above rather than repeating it in a second job.
+      # playwright.config.ts starts its own server against a throwaway database.
+      - name: Browser tests
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  docker:
+    name: Container builds and serves
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: snackexercise-tracker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Building is not the same as working: the runtime stage assembles the
+      # standalone bundle, the Prisma CLI and the seed by hand, and a mistake
+      # there only shows when the container is asked to start.
+      - name: Start it and check it serves
+        run: |
+          docker run -d --name snacktest -p 3000:3000 \
+            -e TZ=Europe/Berlin -v snackdata:/data snackexercise-tracker:ci
+
+          for _ in $(seq 1 45); do
+            if curl -fsS http://localhost:3000/api/health > /tmp/health.json; then
+              echo "healthy: $(cat /tmp/health.json)"
+              # Migrations and the seed run at start-up; an empty catalogue
+              # means one of them silently did nothing.
+              count=$(curl -fsS http://localhost:3000/api/exercises \
+                | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["exercises"]))')
+              echo "catalogue: $count exercises"
+              test "$count" -gt 0
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::the container never became healthy"
+          docker logs snacktest
+          exit 1
+
+      - name: Container logs
+        if: failure()
+        run: docker logs snacktest || true
