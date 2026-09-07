@@ -1,5 +1,7 @@
 # Snack Exercise Tracker
 
+[![CI](https://github.com/dm807cam/snackexercise-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/dm807cam/snackexercise-tracker/actions/workflows/ci.yml)
+
 A workout log for people who don't do workouts.
 
 If you train by wandering into the basement a few times a day and picking
@@ -159,6 +161,23 @@ npm run dev
 | `npm test` | unit tests (Vitest) |
 | `npm run test:e2e` | browser smoke tests (Playwright) |
 | `npm run typecheck` | TypeScript |
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request,
+in two parallel jobs:
+
+- **Typecheck, unit tests, build, browser tests** — the commands in the table
+  above, on Node 22 to match the container.
+- **Container builds and serves** — builds the image, starts it, and checks that
+  `/api/health` comes up and the catalogue actually seeded. Building is not the
+  same as working: the runtime stage assembles the standalone bundle, the Prisma
+  CLI and the seed by hand, and a mistake there only shows when the container is
+  asked to start.
+
+To reproduce a CI failure locally, run the same sequence from a clean checkout —
+`generated/` is gitignored, so `npx prisma generate` comes first or nothing
+resolves.
 
 Unit tests are pinned to `Europe/Berlin`, because the DST cases they cover would
 prove nothing under UTC.
