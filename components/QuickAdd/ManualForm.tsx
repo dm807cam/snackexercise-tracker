@@ -13,6 +13,12 @@ export interface ManualDraft {
   distanceM: number | null;
   avgHeartRate: number | null;
   notes: string | null;
+  /**
+   * "HH:MM" on the app's clock, or null for "whenever the app would have
+   * stamped it". Sent as digits rather than as an instant so the server can
+   * resolve it in the app's configured zone; see lib/validation.ts.
+   */
+  performedTime: string | null;
 }
 
 export function ManualForm({
@@ -49,6 +55,7 @@ export function ManualForm({
     initial?.avgHeartRate != null ? String(initial.avgHeartRate) : "",
   );
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [time, setTime] = useState(initial?.performedTime ?? "");
 
   const selected = exercises.find((e) => e.id === exerciseId) ?? null;
   // Distance and heart rate are asked for only where they mean something. A
@@ -98,6 +105,7 @@ export function ManualForm({
       avgHeartRate:
         heartRateValue == null || Number.isNaN(heartRateValue) ? null : Math.round(heartRateValue),
       notes: notes.trim() === "" ? null : notes.trim(),
+      performedTime: /^\d{2}:\d{2}$/.test(time) ? time : null,
     });
   }
 
@@ -189,25 +197,47 @@ export function ManualForm({
           step="0.5"
           min={0}
         />
+        {/*
+          When it happened, not when it was logged. A run done at 06:30 and
+          remembered at 21:00 is an evening entry everywhere in the app until
+          this is corrected — and since the whole point of the spacing metric is
+          *when* the day's training landed, an uncorrectable timestamp would
+          make that metric measure the user's logging habits instead.
+        */}
         <div>
-          <label className="mb-2 block text-sm font-medium" htmlFor="entry-notes">
-            Note
+          <label className="mb-2 block text-sm font-medium" htmlFor="entry-time">
+            Time
           </label>
           <input
-            id="entry-notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="optional"
-            className="w-full rounded-lg px-3 py-3 text-base"
+            id="entry-time"
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
         </div>
       </div>
 
+      <div>
+        <label className="mb-2 block text-sm font-medium" htmlFor="entry-notes">
+          Note
+        </label>
+        <input
+          id="entry-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="optional"
+          className="w-full rounded-lg px-3 py-3 text-base"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+        />
+      </div>
+
       <p className="text-xs text-dim">
         {isCardio
           ? "Distance, duration and heart rate are all optional — but a pace or a heart rate is what makes the effort count properly."
-          : "Reps, weight and duration are all optional — log what you actually know."}
+          : "Reps, weight and duration are all optional — log what you actually know."}{" "}
+        {time ? "Filed at the time shown." : "Leave the time empty and it is filed as it is now."}
       </p>
 
       <button

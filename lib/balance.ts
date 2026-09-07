@@ -49,6 +49,26 @@ export const STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK = 60;
  */
 export const PRIOR_WEIGHT = 0.5;
 
+/**
+ * MET-minutes that carry the same fraction of a weekly guideline as one
+ * effective set — the app's one and only exchange rate between the two
+ * currencies, derived from the two targets rather than invented beside them.
+ *
+ * It exists so that a chart can put both qualities on one radial scale without
+ * ADDING them. Nothing here makes a run into resistance volume: effective sets
+ * are still scaled by (1 - cardioBias) everywhere, and the two series stay
+ * separate lines with separate colours. This constant only answers "how far out
+ * should the cardio line be drawn", and it answers it the same way the calendar
+ * already answers "how dark should this day be".
+ */
+export const MET_MIN_PER_EFFECTIVE_SET =
+  CARDIO_TARGET_MET_MIN_PER_WEEK / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK;
+
+/** MET-minutes expressed on the effective-set scale. Never added to real sets. */
+export function effectiveSetEquivalents(metMinutes: number): number {
+  return metMinutes / MET_MIN_PER_EFFECTIVE_SET;
+}
+
 export interface BalanceEntry extends CardioInput {
   id: string;
   performedAt: Date;

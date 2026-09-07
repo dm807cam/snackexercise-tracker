@@ -1,6 +1,6 @@
 # 8. Cardio contributes no effective sets
 
-**Status:** Accepted · 2026-09-07
+**Status:** Accepted · 2026-09-07 · refined by [0010](./0010-cardio-is-a-second-radar-series.md)
 
 ## Context
 
@@ -42,7 +42,9 @@ spoke, because the radar is muscle coverage and cardio is not a muscle.
 have made one number do two jobs, and every reading of the radar would then have
 needed a caveat.
 
-**A 13th radar axis.** Breaks the chart's meaning to save a list row.
+**A 13th radar axis.** Breaks the chart's meaning to save a list row. (ADR 0010
+later gave cardio a second *series* across the existing twelve axes, which is a
+different thing: no spoke is added, and no number is blended.)
 
 ## Consequences
 

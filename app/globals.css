@@ -38,6 +38,15 @@
   --strength: oklch(0.62 0.15 265);
   --cardio: oklch(0.62 0.17 50);
   --balance-mid: oklch(0.88 0.01 90);
+
+  /* Timing is a third quality, not a third intensity: "when in the day" is
+     neither strength nor cardio, and painting it in either colour would make
+     the spacing chart look like a claim about one of them. A teal at the same
+     lightness and chroma as the other two, far enough from both to stay
+     separable under protanopia and deuteranopia (checked, not eyeballed) —
+     though it never has to be told apart from them inside one chart, because
+     spacing is the only series on its own. */
+  --timing: oklch(0.62 0.12 175);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,6 +65,7 @@
     --strength: oklch(0.74 0.14 265);
     --cardio: oklch(0.74 0.16 58);
     --balance-mid: oklch(0.34 0.012 60);
+    --timing: oklch(0.74 0.11 175);
   }
 }
 

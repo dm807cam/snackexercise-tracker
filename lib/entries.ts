@@ -6,7 +6,7 @@
 import { prisma } from "./db";
 import { ApiError } from "./api";
 import { slugify } from "./slug";
-import { toLocalDateInZone } from "./dates";
+import { toLocalDateInZone, zonedDateTimeToInstant } from "./dates";
 import { getAppConfig } from "./app-config";
 import type { z } from "zod";
 import type { entryInputSchema } from "./validation";
@@ -60,8 +60,18 @@ export async function createEntry(input: EntryInput) {
 
   // performedAt drives ordering within the day; localDate drives which day it
   // belongs to. If only one is given, derive the other rather than guessing.
-  const performedAt = input.performedAt ? new Date(input.performedAt) : new Date();
   const { timeZone } = await getAppConfig();
+
+  // A typed "HH:MM" wins over any instant sent alongside it: it is the thing
+  // the user actually chose, and resolving it here means it means the same
+  // clock time whatever zone the browser was in.
+  const performedAt =
+    input.performedTime && input.localDate
+      ? zonedDateTimeToInstant(input.localDate, input.performedTime, timeZone)
+      : input.performedAt
+        ? new Date(input.performedAt)
+        : new Date();
+
   const localDate = input.localDate ?? toLocalDateInZone(performedAt, timeZone);
 
   return prisma.setEntry.create({

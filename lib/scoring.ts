@@ -13,9 +13,14 @@
  *
  * Cardio is scored elsewhere, in lib/cardio.ts, in MET-minutes. The only thing
  * it does here is scale itself out: every effective set is multiplied by
- * (1 - cardioBias), so a run contributes nothing to the radar, the body map or
- * "days since last trained". Those views answer a question about hypertrophy
- * stimulus, and a run does not supply one.
+ * (1 - cardioBias), so a run adds nothing to the effective-set total, the body
+ * map fill or "days since last trained". Those answer a question about
+ * hypertrophy stimulus, and a run does not supply one.
+ *
+ * Cardio is not therefore invisible. It travels as a SECOND CHANNEL in the same
+ * per-muscle shape — an outline on the body map, its own line on the radar — so
+ * that a 10 km run shows up on the calves it actually loaded. The two channels
+ * are computed separately, coloured separately and never summed.
  */
 
 import { AXES, type AxisSlug, MUSCLE_SLUGS, type MuscleSlug, axisForMuscle } from "./muscles";
@@ -23,6 +28,7 @@ import { type LocalDate, daysBetween } from "./dates";
 // Type-only: lib/balance.ts imports the scoring maths, so a value import here
 // would close the cycle. The balance itself is computed by the caller.
 import type { BalanceResult } from "./balance";
+import type { SpacingSummary } from "./spacing";
 
 export interface ScoredEntry {
   id: string;
@@ -176,8 +182,22 @@ export interface AxisStat {
   perWeek: number;
   /** Same measure over the equivalent preceding window, for the trend overlay. */
   previousPerWeek: number;
+  /**
+   * The cardio this axis absorbed, per week, on the effective-set scale.
+   *
+   * A SECOND SERIES, never added to `perWeek`. A run really does load the
+   * calves, and a radar that draws nothing after one is as misleading as a body
+   * map that does — but the load is aerobic, not hypertrophic, so it gets its
+   * own colour and its own line, exactly as it gets its own outline on the body
+   * map. The conversion is lib/balance.ts's guideline exchange rate, applied by
+   * the caller; see MET_MIN_PER_EFFECTIVE_SET.
+   */
+  cardioPerWeek: number;
+  previousCardioPerWeek: number;
   /** Raw effective sets inside the window. */
   total: number;
+  /** Cardio load inside the window, same units as `cardioPerWeek`. */
+  cardioTotal: number;
   /** Days since this axis was last trained; null if never (within the data). */
   daysSinceTrained: number | null;
 }
@@ -204,6 +224,8 @@ export interface StatsResult {
   balance: BalanceResult;
   /** Days since any cardio was logged; null if never. */
   daysSinceCardio: number | null;
+  /** How well the window's training was spread through each day. */
+  spacing: SpacingSummary;
 }
 
 /**
@@ -216,12 +238,12 @@ export function perWeek(total: number, windowDays: number): number {
   return (total / windowDays) * 7;
 }
 
-export function buildStats(params: {
+export function buildStats<T extends ScoredEntry>(params: {
   windowDays: number;
   start: LocalDate;
   end: LocalDate;
-  current: readonly ScoredEntry[];
-  previous: readonly ScoredEntry[];
+  current: readonly T[];
+  previous: readonly T[];
   /** Every entry ever, used only for "days since last trained". */
   lastTrained: ReadonlyMap<AxisSlug, LocalDate>;
   today: LocalDate;
@@ -229,6 +251,14 @@ export function buildStats(params: {
   /** Most recent day carrying any cardio, over the whole log. */
   lastCardio: LocalDate | null;
   daysWithSteps: number;
+  spacing: SpacingSummary;
+  /**
+   * One entry's aerobic load, already on the effective-set scale. Injected so
+   * this file stays free of both the MET maths and the exchange rate — and so
+   * importing lib/balance.ts for a value here, which would close an import
+   * cycle, never becomes necessary.
+   */
+  cardioLoadFor: (entry: T) => number;
 }): StatsResult {
   const {
     windowDays,
@@ -241,10 +271,14 @@ export function buildStats(params: {
     balance,
     lastCardio,
     daysWithSteps,
+    spacing,
+    cardioLoadFor,
   } = params;
 
   const currentAxes = rollUpToAxes(muscleEffectiveSets(current));
   const previousAxes = rollUpToAxes(muscleEffectiveSets(previous));
+  const currentCardio = rollUpToAxes(muscleCardioLoad(current, cardioLoadFor));
+  const previousCardio = rollUpToAxes(muscleCardioLoad(previous, cardioLoadFor));
 
   const axes: AxisStat[] = AXES.map(({ slug }) => {
     const last = lastTrained.get(slug);
@@ -253,6 +287,9 @@ export function buildStats(params: {
       total: round(currentAxes[slug]),
       perWeek: round(perWeek(currentAxes[slug], windowDays)),
       previousPerWeek: round(perWeek(previousAxes[slug], windowDays)),
+      cardioTotal: round(currentCardio[slug]),
+      cardioPerWeek: round(perWeek(currentCardio[slug], windowDays)),
+      previousCardioPerWeek: round(perWeek(previousCardio[slug], windowDays)),
       daysSinceTrained: last ? Math.max(0, daysBetween(last, today)) : null,
     };
   });
@@ -271,6 +308,7 @@ export function buildStats(params: {
     },
     balance,
     daysSinceCardio: lastCardio ? Math.max(0, daysBetween(lastCardio, today)) : null,
+    spacing,
   };
 }
 

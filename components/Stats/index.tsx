@@ -6,6 +6,7 @@ import { axisLabel } from "@/lib/muscles";
 import { formatSets } from "@/lib/format";
 import { MuscleRadar } from "./MuscleRadar";
 import { BalanceGradient, type BalancePayload } from "./BalanceGradient";
+import { SpacingCard, type SpacingPayload } from "./SpacingCard";
 
 const WINDOWS = [7, 30, 60, 90, 180] as const;
 const WINDOW_LABELS: Record<number, string> = {
@@ -20,7 +21,11 @@ export interface AxisStat {
   axis: string;
   perWeek: number;
   previousPerWeek: number;
+  /** Aerobic load on the same axis, on the effective-set scale. Never summed with perWeek. */
+  cardioPerWeek: number;
+  previousCardioPerWeek: number;
   total: number;
+  cardioTotal: number;
   daysSinceTrained: number | null;
 }
 
@@ -38,6 +43,7 @@ export interface StatsPayload {
   };
   balance: BalancePayload;
   daysSinceCardio: number | null;
+  spacing: SpacingPayload;
 }
 
 export function StatsView({ initial }: { initial: StatsPayload }) {
@@ -64,8 +70,15 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
     };
   }, [windowDays, stats.windowDays]);
 
-  const ranked = [...stats.axes].sort((a, b) => b.perWeek - a.perWeek);
-  const maxPerWeek = Math.max(1, ...ranked.map((a) => a.perWeek));
+  // Ranked by the taller of its two bars, so an axis that only ever sees cardio
+  // is not filed at the bottom of a list it visibly appears in.
+  const ranked = [...stats.axes].sort(
+    (a, b) => Math.max(b.perWeek, b.cardioPerWeek) - Math.max(a.perWeek, a.cardioPerWeek),
+  );
+  const maxPerWeek = Math.max(
+    1,
+    ...ranked.map((a) => Math.max(a.perWeek, a.cardioPerWeek)),
+  );
   const neglected = [...stats.axes]
     .filter((a) => a.daysSinceTrained === null || a.daysSinceTrained >= 5)
     .sort((a, b) => (b.daysSinceTrained ?? 9999) - (a.daysSinceTrained ?? 9999));
@@ -77,7 +90,8 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
       <header className="pt-4 pb-3">
         <h1 className="text-lg font-semibold">Coverage</h1>
         <p className="text-xs text-dim">
-          Effective sets per week — normalised so the windows are comparable.
+          Strength and cardio per week, per muscle group — normalised so the windows are
+          comparable.
         </p>
       </header>
 
@@ -194,7 +208,6 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           <h2 className="mb-2 text-sm font-semibold">All muscle groups</h2>
           <ul className="flex flex-col gap-2">
             {ranked.map((stat) => {
-              const width = (stat.perWeek / maxPerWeek) * 100;
               const delta = stat.perWeek - stat.previousPerWeek;
               return (
                 <li key={stat.axis}>
@@ -202,10 +215,19 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
                     <span>{axisLabel(stat.axis)}</span>
                     <span className="tabular-nums text-dim">
                       {formatSets(stat.perWeek)}/wk
+                      {stat.cardioPerWeek > 0 && (
+                        <span className="ml-1.5" style={{ color: "var(--cardio)" }}>
+                          +{formatSets(stat.cardioPerWeek)}
+                        </span>
+                      )}
+                      {/* The trend belongs to the strength series, so it wears
+                          the strength colour. It used to wear the accent, which
+                          is now the cardio orange — putting "+1.8 cardio" and
+                          "up 1.2 on strength" side by side in one colour. */}
                       {Math.abs(delta) >= 0.5 && (
                         <span
                           className="ml-1.5"
-                          style={{ color: delta > 0 ? "var(--accent)" : "var(--text-dim)" }}
+                          style={{ color: delta > 0 ? "var(--strength)" : "var(--text-dim)" }}
                         >
                           {delta > 0 ? "▲" : "▼"}
                           {formatSets(Math.abs(delta))}
@@ -213,24 +235,30 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
                       )}
                     </span>
                   </div>
-                  <div
-                    className="h-2 overflow-hidden rounded-full"
-                    style={{ background: "var(--surface-2)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${width}%`,
-                        background: "var(--accent)",
-                        transition: "width 250ms ease",
-                      }}
+                  {/* Two bars, one under the other, rather than one stacked bar:
+                      stacking would read as a total, and these two numbers are
+                      in different currencies and must never be added. */}
+                  <Bar
+                    value={stat.perWeek}
+                    max={maxPerWeek}
+                    color="var(--strength)"
+                    label={`${axisLabel(stat.axis)} strength`}
+                  />
+                  {stat.cardioPerWeek > 0 && (
+                    <Bar
+                      value={stat.cardioPerWeek}
+                      max={maxPerWeek}
+                      color="var(--cardio)"
+                      label={`${axisLabel(stat.axis)} cardio`}
                     />
-                  </div>
+                  )}
                 </li>
               );
             })}
           </ul>
         </section>
+
+        <SpacingCard spacing={stats.spacing} />
 
         {stats.totals.sets === 0 && (
           <p className="mt-6 text-center text-sm text-dim">
@@ -245,6 +273,36 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
 /** 8,432 -> "8.4k". Four stat tiles on a phone have no room for the full number. */
 function compact(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+}
+
+function Bar({
+  value,
+  max,
+  color,
+  label,
+}: {
+  value: number;
+  max: number;
+  color: string;
+  label: string;
+}) {
+  return (
+    <div
+      className="mt-1 h-2 overflow-hidden rounded-full"
+      style={{ background: "var(--surface-2)" }}
+      role="img"
+      aria-label={`${label}: ${formatSets(value)} per week`}
+    >
+      <div
+        className="h-full rounded-full"
+        style={{
+          width: `${Math.min(100, (value / max) * 100)}%`,
+          background: color,
+          transition: "width 250ms ease",
+        }}
+      />
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

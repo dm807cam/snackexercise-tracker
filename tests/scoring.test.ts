@@ -14,7 +14,8 @@ import {
   type ScoredEntry,
 } from "@/lib/scoring";
 import type { AxisSlug } from "@/lib/muscles";
-import { buildBalance } from "@/lib/balance";
+import { buildBalance, effectiveSetEquivalents } from "@/lib/balance";
+import { summariseSpacing } from "@/lib/spacing";
 
 /**
  * The inputs buildStats gained when cardio arrived. These tests are about the
@@ -29,6 +30,8 @@ const NO_CARDIO = {
   }),
   lastCardio: null,
   daysWithSteps: 0,
+  spacing: summariseSpacing([]),
+  cardioLoadFor: () => 0,
 };
 
 function entry(overrides: Partial<ScoredEntry> & { muscles: [string, number][] }): ScoredEntry {
@@ -307,6 +310,40 @@ describe("buildStats", () => {
       ...NO_CARDIO,
     });
     expect(stats.totals.activeDays).toBe(2);
+  });
+
+  it("keeps cardio on its own series instead of adding it to effective sets", () => {
+    // A run: pure cardio, so zero effective sets, but a real aerobic load on the
+    // calves. The radar has to show the second without inventing the first.
+    const run = entry({
+      id: "run",
+      localDate: "2026-09-05",
+      muscles: [["calves", 0.25]],
+      exercise: { id: "x1", name: "Run", cardioBias: 1, muscles: [] },
+    });
+
+    const stats = buildStats({
+      windowDays: 7,
+      start: "2026-08-31",
+      end: today,
+      current: [run],
+      previous: [],
+      lastTrained: new Map(),
+      today,
+      ...NO_CARDIO,
+      // 400 MET-minutes, which is 40 effective-set-equivalents before the
+      // muscle weighting takes its quarter.
+      cardioLoadFor: () => effectiveSetEquivalents(400),
+    });
+
+    const calves = stats.axes.find((a) => a.axis === "calves")!;
+    expect(calves.perWeek).toBe(0);
+    expect(calves.total).toBe(0);
+    expect(calves.cardioTotal).toBe(10);
+    expect(calves.cardioPerWeek).toBe(10);
+
+    // And nothing leaks onto an axis the run never touched.
+    expect(stats.axes.find((a) => a.axis === "chest")!.cardioPerWeek).toBe(0);
   });
 
   it("always returns every axis so the radar keeps its shape", () => {

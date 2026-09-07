@@ -9,11 +9,14 @@ import { Sheet } from "@/components/Sheet";
 import { ManualForm, type ManualDraft } from "@/components/QuickAdd/ManualForm";
 import { Toast, type ToastState } from "@/components/Toast";
 import { api } from "@/lib/client";
-import { addDays, type LocalDate } from "@/lib/dates";
+import { addDays, formatTime, type LocalDate } from "@/lib/dates";
 import { formatSets, type Units } from "@/lib/format";
 import type { MuscleSlug } from "@/lib/muscles";
 import type { MuscleTotals } from "@/lib/scoring";
+import type { Suggestion } from "@/lib/suggest";
 import { DayHeader } from "./DayHeader";
+import { DaySpacing, type DaySpacingPayload } from "./DaySpacing";
+import { NextUp } from "./NextUp";
 import { StepsField } from "./StepsField";
 import { EntryList, type DayEntry } from "./EntryList";
 import { useSwipeDays } from "./useSwipeDays";
@@ -28,6 +31,7 @@ export interface DayViewData {
   steps: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
+  spacing: DaySpacingPayload;
 }
 
 export function DayView({
@@ -38,6 +42,7 @@ export function DayView({
   timeZone,
   today,
   hasKey,
+  suggestion,
 }: {
   initial: DayViewData;
   exercises: ExerciseOption[];
@@ -47,11 +52,20 @@ export function DayView({
   timeZone: string;
   today: LocalDate;
   hasKey: boolean;
+  /**
+   * What to train next. Computed on the server from the 30-day window, and
+   * absent when looking at a past day — "you should do this next" is a
+   * statement about now, not about a Tuesday in August.
+   */
+  suggestion: Suggestion | null;
 }) {
   const router = useRouter();
   const [day, setDay] = useState(initial);
   const [selected, setSelected] = useState<MuscleSlug | null>(null);
   const [adding, setAdding] = useState(false);
+  // The movement the suggestion bar proposed, carried into the log sheet so
+  // acting on a suggestion is one tap and not a search.
+  const [preselect, setPreselect] = useState<string | null>(null);
   const [editing, setEditing] = useState<DayEntry | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -155,6 +169,11 @@ export function DayView({
           distanceM: draft.distanceM,
           avgHeartRate: draft.avgHeartRate,
           notes: draft.notes,
+          // Sent as digits plus the day they belong to; the server resolves
+          // them in the app's zone, which the browser may not share.
+          ...(draft.performedTime
+            ? { performedTime: draft.performedTime, localDate: day.date }
+            : {}),
         }),
       });
       setEditing(null);
@@ -177,6 +196,16 @@ export function DayView({
         hasEntries={day.entries.length > 0}
       />
 
+      {suggestion && (
+        <NextUp
+          suggestion={suggestion}
+          onPick={(exerciseId) => {
+            setPreselect(exerciseId);
+            setAdding(true);
+          }}
+        />
+      )}
+
       <div
         style={{
           transform: `translateX(${dragX}px)`,
@@ -198,6 +227,8 @@ export function DayView({
             {day.metMinutes > 0 && ` · ${day.metMinutes} MET-min`}
           </p>
         )}
+
+        <DaySpacing spacing={day.spacing} />
 
         <StepsField
           date={day.date}
@@ -237,11 +268,15 @@ export function DayView({
       <QuickAdd
         open={adding}
         date={day.date}
+        initialExerciseId={preselect ?? undefined}
         units={units}
         exercises={exercises}
         recentIds={recentIds}
         hasKey={hasKey}
-        onClose={() => setAdding(false)}
+        onClose={() => {
+          setAdding(false);
+          setPreselect(null);
+        }}
         onSaved={async (message) => {
           await refresh();
           setToast({ message });
@@ -265,6 +300,7 @@ export function DayView({
               distanceM: editing.distanceM,
               avgHeartRate: editing.avgHeartRate,
               notes: editing.notes,
+              performedTime: formatTime(new Date(editing.performedAt), timeZone),
             }}
             submitLabel="Save changes"
             onSubmit={saveEdit}

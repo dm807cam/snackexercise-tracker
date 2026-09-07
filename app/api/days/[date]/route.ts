@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { handle } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { getDaySummary } from "@/lib/queries";
+import { getAppConfig } from "@/lib/app-config";
 import { localDateSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,8 @@ type Ctx = { params: Promise<{ date: string }> };
 export async function GET(_request: NextRequest, { params }: Ctx) {
   return handle(async () => {
     const { date } = await params;
-    return getDaySummary(localDateSchema.parse(date));
+    const { timeZone } = await getAppConfig();
+    return getDaySummary(localDateSchema.parse(date), timeZone);
   });
 }
 

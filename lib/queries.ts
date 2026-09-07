@@ -9,6 +9,7 @@ import {
   addDays,
   daysBetween,
   enumerateDates,
+  minutesOfDayInZone,
   previousWindowRange,
   todayLocalDate,
   windowRange,
@@ -34,7 +35,18 @@ import {
   type StepSettings,
   type StepsMode,
 } from "./cardio";
-import { buildBalance, STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK } from "./balance";
+import {
+  buildBalance,
+  effectiveSetEquivalents,
+  STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK,
+} from "./balance";
+import {
+  DEFAULT_ACTIVE_WINDOW,
+  daySpacing,
+  summariseSpacing,
+  type ActiveWindow,
+  type SpacingResult,
+} from "./spacing";
 
 /** The exercise fields every scoring path needs. */
 const entryInclude = {
@@ -87,20 +99,55 @@ export async function getEntriesInRange(
   return rows as unknown as EntryWithExercise[];
 }
 
-export async function getDaySummary(date: LocalDate): Promise<DaySummary & {
+export async function getDaySummary(
+  date: LocalDate,
+  timeZone?: string,
+): Promise<DaySummary & {
   entries: EntryWithExercise[];
   steps: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
+  spacing: SpacingResult;
 }> {
-  const [entries, steps] = await Promise.all([getEntriesForDate(date), getSteps(date)]);
+  const [entries, steps, activeWindow] = await Promise.all([
+    getEntriesForDate(date),
+    getSteps(date),
+    getActiveWindow(),
+  ]);
   return {
     ...summariseDay(date, entries),
     entries,
     steps,
     cardioMuscles: muscleCardioLoad(entries, entryMetMinutes),
     metMinutes: Math.round(entries.reduce((sum, e) => sum + entryMetMinutes(e), 0)),
+    spacing: daySpacing(
+      entries.map((e) => minutesOfDayInZone(e.performedAt, timeZone)),
+      activeWindow,
+    ),
   };
+}
+
+/**
+ * The hours the user is normally up and about, which is the window the spacing
+ * metric scores a day against.
+ *
+ * A default rather than a fixed constant because "spread through the day" means
+ * something different to a night-shift nurse, and scoring their 22:00 session
+ * as a badly timed one would make the whole metric something to ignore.
+ */
+export async function getActiveWindow(): Promise<ActiveWindow> {
+  const settings = await getSettings();
+  const startHour = Number(settings.dayStartHour);
+  const endHour = Number(settings.dayEndHour);
+
+  const start = Number.isInteger(startHour) && startHour >= 0 && startHour <= 23
+    ? startHour
+    : DEFAULT_ACTIVE_WINDOW.startHour;
+  const end = Number.isInteger(endHour) && endHour >= 1 && endHour <= 24
+    ? endHour
+    : DEFAULT_ACTIVE_WINDOW.endHour;
+
+  return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
 }
 
 /**
@@ -321,19 +368,31 @@ export async function getFirstLoggedDate(): Promise<LocalDate | null> {
  * six — the two would drift and the tab you landed on would decide what the
  * numbers meant.
  */
-export async function loadStats(windowDays: number, today: LocalDate = todayLocalDate()) {
+export async function loadStats(
+  windowDays: number,
+  today: LocalDate = todayLocalDate(),
+  timeZone?: string,
+) {
   const current = windowRange(windowDays, today);
   const previous = previousWindowRange(windowDays, today);
 
-  const [currentEntries, previousEntries, lastTrained, lastCardio, steps, stepSettings] =
-    await Promise.all([
-      getEntriesInRange(current.start, current.end),
-      getEntriesInRange(previous.start, previous.end),
-      getLastTrainedByAxis(),
-      getLastCardioDate(),
-      getStepsInRange(current.start, current.end),
-      getStepSettings(today),
-    ]);
+  const [
+    currentEntries,
+    previousEntries,
+    lastTrained,
+    lastCardio,
+    steps,
+    stepSettings,
+    activeWindow,
+  ] = await Promise.all([
+    getEntriesInRange(current.start, current.end),
+    getEntriesInRange(previous.start, previous.end),
+    getLastTrainedByAxis(),
+    getLastCardioDate(),
+    getStepsInRange(current.start, current.end),
+    getStepSettings(today),
+    getActiveWindow(),
+  ]);
 
   const balance = buildBalance({
     windowDays,
@@ -341,6 +400,19 @@ export async function loadStats(windowDays: number, today: LocalDate = todayLoca
     stepsByDate: steps,
     stepSettings,
   });
+
+  const minutesByDate = new Map<string, number[]>();
+  for (const entry of currentEntries) {
+    const minutes = minutesByDate.get(entry.localDate);
+    const at = minutesOfDayInZone(entry.performedAt, timeZone);
+    if (minutes) minutes.push(at);
+    else minutesByDate.set(entry.localDate, [at]);
+  }
+
+  const spacing = summariseSpacing(
+    [...minutesByDate].map(([date, minutes]) => [date, daySpacing(minutes, activeWindow)] as const),
+    activeWindow,
+  );
 
   return buildStats({
     windowDays,
@@ -353,6 +425,11 @@ export async function loadStats(windowDays: number, today: LocalDate = todayLoca
     balance,
     lastCardio,
     daysWithSteps: Object.keys(steps).length,
+    spacing,
+    // The radar's second series: MET-minutes carried onto the effective-set
+    // scale by the balance module's guideline exchange rate. Converted here,
+    // once, so the chart never has to know either currency.
+    cardioLoadFor: (entry) => effectiveSetEquivalents(entryMetMinutes(entry)),
   });
 }
 

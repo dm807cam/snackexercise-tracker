@@ -134,6 +134,15 @@ test.describe("cardio and steps", () => {
     await expect(page.getByRole("button", { name: /11,000 steps/ })).toBeVisible();
   });
 
+  test("the radar carries both a strength and a cardio line", async ({ page }) => {
+    await page.goto("/stats");
+    await expect(page.getByRole("heading", { name: "Coverage" })).toBeVisible();
+
+    // Identity is never carried by colour alone: both series are named.
+    await expect(page.getByText("Strength", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Cardio", { exact: true }).first()).toBeVisible();
+  });
+
   test("the balance marker appears on stats", async ({ page }) => {
     await page.goto("/stats");
 
@@ -141,5 +150,49 @@ test.describe("cardio and steps", () => {
     // The marker is a labelled image so the position is never carried by
     // colour alone.
     await expect(page.getByRole("img", { name: /Training balance/ })).toBeVisible();
+  });
+});
+
+/**
+ * The retiming path. A run done at 06:30 and only logged in the evening has to
+ * be movable to the morning, or every timing measure in the app is really a
+ * measure of when the user reached for their phone.
+ */
+test.describe("when it happened", () => {
+  test("an entry can be filed at the time it was actually done", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Log a snack" }).click();
+    await page.getByRole("tab", { name: "Manual" }).click();
+    await page.getByLabel("Exercise", { exact: true }).fill("Goblet");
+    await page.getByRole("button", { name: "Goblet squat", exact: true }).click();
+    await page.getByLabel("Time", { exact: true }).fill("06:30");
+    await page.getByRole("button", { name: "Log it" }).click();
+
+    const entry = page.getByRole("listitem").filter({ hasText: "Goblet squat" });
+    await expect(entry).toBeVisible();
+    await expect(entry.getByRole("time")).toHaveText("06:30");
+
+    // And it can be corrected afterwards, which is the case that matters: the
+    // run you forgot to log until the evening.
+    await entry.getByRole("button", { name: "Edit Goblet squat" }).click();
+    await page.getByLabel("Time", { exact: true }).fill("18:45");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(page.getByRole("listitem").filter({ hasText: "Goblet squat" }).getByRole("time"))
+      .toHaveText("18:45");
+
+    // The day now has something logged, so it is scored for how it was spread.
+    await expect(page.getByText("Spread through the day")).toBeVisible();
+
+    await page.getByRole("listitem").filter({ hasText: "Goblet squat" })
+      .getByRole("button", { name: "Edit Goblet squat" }).click();
+    await page.getByRole("button", { name: "Delete entry" }).click();
+  });
+
+  test("the day opens with a suggestion of what to train next", async ({ page }) => {
+    await page.goto("/");
+    // Named, reasoned and tappable — never a bare colour or an unexplained pick.
+    await expect(page.getByRole("button", { name: /^Log .+ — / })).toBeVisible();
   });
 });

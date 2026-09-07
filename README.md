@@ -15,21 +15,28 @@ Self-hosted, single container, SQLite on a volume. No account, no cloud.
 
 ## What it does
 
-**Today** — front and back body diagrams shaded by what you've trained, above a
-chronological list of the day's entries. Chevrons top-left or a horizontal
-swipe move between days. Tap a muscle to filter the list to it.
+**Today** — a bar at the top proposing what to train next and why, then front
+and back body diagrams shaded by what you've trained, a timeline of how the
+day's snacks were spread, and a chronological list of the day's entries.
+Chevrons top-left or a horizontal swipe move between days. Tap a muscle to
+filter the list to it; tap the suggestion to log it with the movement already
+chosen.
 
 **Calendar** — a month at a glance, each day shaded by how much work it carried,
 plus active days, current streak and longest gap. Tap any day to open it.
 
 **Stats** — a strength/cardio balance marker over the window, then a 12-axis
-radar of muscle coverage over the last 7 / 30 / 60 / 90 / 180 days, with the
-previous equal period overlaid. Underneath, a list ordered by days since last
-trained. That list is the point of the app.
+radar of muscle coverage over the last 7 / 30 / 60 / 90 / 180 days carrying two
+lines: strength in blue, cardio in orange, with the previous equal period
+overlaid. Underneath, a list ordered by days since last trained, and a spacing
+score with a by-the-hour histogram of when your training actually lands. That
+list is the point of the app.
 
 **Logging** — say it or type it. "Three sets of twelve kettlebell swings at 24
-kilos and a two minute plank" becomes two entries. Nothing is written until you
-confirm, and anything can be deleted (with undo).
+kilos and a two minute plank" becomes two entries. Every entry carries a time
+you can set or correct, so a run done at 06:30 and remembered at 21:00 is a
+morning run. Nothing is written until you confirm, and anything can be deleted
+(with undo).
 
 ### Effective sets, not tonnage
 
@@ -69,6 +76,47 @@ logged to say anything honest.
 Under Settings you can turn step-counting off, or up to full weight, and set the
 baseline by hand instead of letting the app take the quiet quarter of your own
 days.
+
+Cardio stays out of the effective-set total, but not out of sight. It travels as
+a second channel in the same per-muscle shape — an outline on the body map, its
+own orange line on the radar — so a 10 km run shows up on the calves it actually
+loaded. The two are drawn separately and never added: the radar puts them on one
+radial scale using the same exchange rate the calendar already uses (600
+MET-minutes and 60 effective sets are each one guideline-week, so 10 MET-minutes
+reach as far as one effective set).
+
+### Spreading it out
+
+Volume is only half the claim this app makes. The other half is that the same
+work spread across the day beats the same work in one block, and until recently
+nothing here measured it.
+
+The **spacing score** does. Entries within a quarter of an hour of each other
+count as one bout; the bouts cut your waking window into gaps, and the score
+compares how concentrated those gaps are against a day broken up roughly every
+couple of hours. Five evenly spread bouts score 100%; one evening block scores
+under 30%, and so does a single well-placed session — frequency counts, not just
+evenness. A day with nothing logged scores nothing at all rather than zero,
+because a rest day is not a badly spread day.
+
+The day page shows today's bouts on a timeline; the stats page shows the average
+over the window with a histogram of which hours your training actually lands in.
+Set your waking hours under Settings — scoring a night-shift worker's 22:00
+session as badly timed would just make the number something to ignore.
+
+### What to do next
+
+The day page opens with one line: the muscle group that has waited longest, a
+movement from the catalogue that trains it, and the reason. It ranks the twelve
+axes on staleness (days since last trained, dominant) and volume deficit
+(against your best-served axis, as the tie-break), with cardio competing as a
+thirteenth pseudo-axis against its own guideline — so a fortnight of lifting and
+no running produces "go for a run" rather than a thirteenth way to say "back".
+If it has been a while since your last snack, the bar says that too.
+
+It is a nudge, not a prescription: it has no idea what equipment is to hand or
+what hurts today, which is why it shows its reasoning, offers two alternatives,
+and gates nothing.
 
 ## Running it
 
@@ -195,20 +243,22 @@ PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromium npm run test:e2e
 app/                 pages and API routes
 components/
   BodyMap/           front/back diagrams and their geometry
-  DayView/           day page: header, swipe, entry list
+  DayView/           day page: header, swipe, entry list, spacing, next-up bar
   QuickAdd/          the "Say it" / "Manual" sheet
-  Stats/             radar chart and the balance gradient
+  Stats/             radar chart, balance gradient, spacing card
 lib/
   muscles.ts         muscle taxonomy — the single source of truth
   scoring.ts         effective-set aggregation (pure, unit tested)
   cardio.ts          MET-minutes, pace equations, step credit (pure)
   balance.ts         the strength/cardio index (pure)
+  spacing.ts         how well a day was broken up (pure)
+  suggest.ts         what to train next, and why (pure)
   dates.ts           local-day arithmetic and formatting
   openrouter.ts      LLM client and response schema
 prisma/              schema, migrations, exercise catalogue seed
 ```
 
-Three decisions worth knowing before changing things:
+A few decisions worth knowing before changing things:
 
 - **`SetEntry` has no parent workout or session.** The absence is the design.
 - **`localDate` is stored, not derived at query time.** Day boundaries follow
@@ -220,6 +270,10 @@ Three decisions worth knowing before changing things:
 - **Steps are a `DailyMetric`, not a `SetEntry`.** They're a measurement of the
   day, not something you did at a moment, and forcing them into the log would
   inflate entry counts, set counts, active days and the calendar shading.
+- **A human-chosen time travels as `performedTime` ("HH:MM") plus `localDate`,
+  never as an instant built in the browser.** The browser cannot know the zone
+  the app buckets days in — that's a stored setting — so an instant it builds
+  lands an hour out for anyone travelling, and on the wrong day near midnight.
 
 The reasoning behind the cardio and steps design is written up in
 [docs/cardio-and-steps.md](./docs/cardio-and-steps.md), with the decisions

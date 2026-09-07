@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { entryUpdateSchema } from "@/lib/validation";
-import { toLocalDateInZone } from "@/lib/dates";
+import { toLocalDateInZone, zonedDateTimeToInstant } from "@/lib/dates";
 import { getAppConfig } from "@/lib/app-config";
 
 export const dynamic = "force-dynamic";
@@ -18,17 +18,32 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     const existing = await prisma.setEntry.findUnique({ where: { id } });
     if (!existing) throw new ApiError("Entry not found", 404);
 
-    const performedAt = patch.performedAt ? new Date(patch.performedAt) : undefined;
     const { timeZone } = await getAppConfig();
+    const { performedTime, performedAt: patchedInstant, localDate: patchedDate, ...fields } = patch;
+
+    // Retiming an entry — the run you did at 06:30 and only logged at 21:00 —
+    // arrives as the digits the user typed plus the day they belong to, and is
+    // resolved against the app's configured zone rather than the browser's.
+    const day = patchedDate ?? existing.localDate;
+    const performedAt = performedTime
+      ? zonedDateTimeToInstant(day, performedTime, timeZone)
+      : patchedInstant
+        ? new Date(patchedInstant)
+        : undefined;
 
     return {
       entry: await prisma.setEntry.update({
         where: { id },
         data: {
-          ...patch,
+          ...fields,
           performedAt,
-          // Moving an entry's time can move it to a different day.
-          localDate: performedAt ? toLocalDateInZone(performedAt, timeZone) : undefined,
+          // Moving an entry's time can move it to a different day. A stated day
+          // is authoritative; otherwise it follows the instant.
+          localDate: performedTime
+            ? day
+            : performedAt
+              ? toLocalDateInZone(performedAt, timeZone)
+              : undefined,
         },
         include: {
           exercise: {

@@ -6,6 +6,11 @@ export const localDateSchema = z.string().refine(isValidLocalDate, {
   message: "Expected a valid YYYY-MM-DD date",
 });
 
+/** 24-hour "HH:MM" — the value an <input type="time"> produces. */
+export const timeOfDaySchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "Expected a time as HH:MM" });
+
 export const muscleWeightSchema = z.object({
   muscle: z.enum(MUSCLE_SLUGS as unknown as [string, ...string[]]),
   weight: z.number().positive().max(1),
@@ -19,6 +24,16 @@ export const entryInputSchema = z.object({
   exerciseId: z.string().min(1).optional(),
   exerciseName: z.string().min(1).max(80).optional(),
   performedAt: z.string().datetime({ offset: true }).optional(),
+  /**
+   * "HH:MM" on the app's own wall clock, paired with `localDate`.
+   *
+   * Preferred over `performedAt` for anything a human typed. The browser may be
+   * in a different zone from the one the app is configured for, so an instant
+   * built there can land an hour out — or on the wrong day — for anyone
+   * travelling. Sending the digits and resolving them server-side against the
+   * configured zone is the only form that survives that.
+   */
+  performedTime: timeOfDaySchema.optional(),
   localDate: localDateSchema.optional(),
   sets: z.number().int().min(1).max(200).default(1),
   reps: z.number().int().min(1).max(10000).nullish(),
@@ -47,6 +62,10 @@ export const entryUpdateSchema = z.object({
   avgHeartRate: z.number().int().min(20).max(250).nullish(),
   notes: z.string().max(500).nullish(),
   performedAt: z.string().datetime({ offset: true }).optional(),
+  /** Move an entry to a different clock time — see `performedTime` above. */
+  performedTime: timeOfDaySchema.optional(),
+  /** The day that time belongs to. Defaults to the entry's existing day. */
+  localDate: localDateSchema.optional(),
 });
 
 /**
@@ -120,4 +139,10 @@ export const settingsSchema = z.object({
    * means "work it out from my own quiet days", which is the default.
    */
   stepBaseline: z.string().max(10).optional(),
+  /**
+   * The hours the spacing metric scores a day against — when the user is
+   * normally up and about. Stored as strings like every other setting.
+   */
+  dayStartHour: z.string().max(2).optional(),
+  dayEndHour: z.string().max(2).optional(),
 });
