@@ -4,7 +4,9 @@ import {
   formatDayLabel,
   formatMonthLabel,
   formatTime,
+  minutesOfDayInZone,
   toLocalDateInZone,
+  zonedDateTimeToInstant,
   addMonths,
   daysBetween,
   enumerateDates,
@@ -161,5 +163,57 @@ describe("toLocalDateInZone", () => {
     expect(toLocalDateInZone(instant, "Europe/Berlin")).toBe("2026-09-07");
     expect(toLocalDateInZone(instant, "UTC")).toBe("2026-09-06");
     expect(toLocalDateInZone(instant, "America/New_York")).toBe("2026-09-06");
+  });
+});
+
+describe("minutesOfDayInZone", () => {
+  it("reads the wall clock of the given zone, not the container's", () => {
+    // 12:00 UTC is 14:00 in Berlin in September (CEST) and 05:00 in Los Angeles.
+    const noonUtc = new Date("2026-09-06T12:00:00Z");
+    expect(minutesOfDayInZone(noonUtc, "Europe/Berlin")).toBe(14 * 60);
+    expect(minutesOfDayInZone(noonUtc, "America/Los_Angeles")).toBe(5 * 60);
+    expect(minutesOfDayInZone(noonUtc, "UTC")).toBe(12 * 60);
+  });
+
+  it("reports midnight as zero rather than as 1440", () => {
+    expect(minutesOfDayInZone(new Date("2026-09-06T00:00:00Z"), "UTC")).toBe(0);
+  });
+});
+
+describe("zonedDateTimeToInstant", () => {
+  it("resolves a typed time in the app's zone, whatever the server's own is", () => {
+    // The run happened at 06:30 in Berlin; that is 04:30 UTC.
+    const instant = zonedDateTimeToInstant("2026-09-06", "06:30", "Europe/Berlin");
+    expect(instant.toISOString()).toBe("2026-09-06T04:30:00.000Z");
+  });
+
+  it("round-trips with the readers that display it", () => {
+    for (const zone of ["Europe/Berlin", "America/Los_Angeles", "Asia/Kolkata", "UTC"]) {
+      const instant = zonedDateTimeToInstant("2026-09-06", "21:15", zone);
+      expect(formatTime(instant, zone)).toBe("21:15");
+      expect(toLocalDateInZone(instant, zone)).toBe("2026-09-06");
+    }
+  });
+
+  it("keeps a late-evening entry on the day it was typed against", () => {
+    // The failure this prevents: an instant built in a browser two zones east
+    // lands 23:30 on the following morning in the app's own zone.
+    const instant = zonedDateTimeToInstant("2026-09-06", "23:30", "America/Los_Angeles");
+    expect(toLocalDateInZone(instant, "America/Los_Angeles")).toBe("2026-09-06");
+  });
+
+  it("lands on the right side of a daylight-saving transition", () => {
+    // Europe/Berlin falls back at 03:00 on 25 October 2026. A single-pass guess
+    // reads the offset before the transition and puts this an hour out.
+    const before = zonedDateTimeToInstant("2026-10-25", "01:30", "Europe/Berlin");
+    expect(formatTime(before, "Europe/Berlin")).toBe("01:30");
+
+    const after = zonedDateTimeToInstant("2026-10-25", "12:00", "Europe/Berlin");
+    expect(formatTime(after, "Europe/Berlin")).toBe("12:00");
+
+    // Spring forward: 02:30 on 29 March 2026 does not exist in Berlin. It must
+    // resolve to a real instant rather than to NaN.
+    const skipped = zonedDateTimeToInstant("2026-03-29", "02:30", "Europe/Berlin");
+    expect(Number.isNaN(skipped.getTime())).toBe(false);
   });
 });

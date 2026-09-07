@@ -6,7 +6,7 @@ import { localDateSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD — per-day effective sets. */
+/** GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD — per-day strength and cardio load. */
 export async function GET(request: NextRequest) {
   return handle(async () => {
     const params = request.nextUrl.searchParams;

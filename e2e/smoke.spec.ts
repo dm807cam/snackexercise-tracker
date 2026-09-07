@@ -134,6 +134,44 @@ test.describe("cardio and steps", () => {
     await expect(page.getByRole("button", { name: /11,000 steps/ })).toBeVisible();
   });
 
+  test("the radar carries both a strength and a cardio line", async ({ page }) => {
+    await page.goto("/stats");
+    await expect(page.getByRole("heading", { name: "Coverage" })).toBeVisible();
+
+    // Identity is never carried by colour alone: both series are named.
+    await expect(page.getByText("Strength", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Cardio", { exact: true }).first()).toBeVisible();
+  });
+
+  test("the calendar names both qualities, never colour alone", async ({ page }) => {
+    // Seeded through the API rather than the UI: this test is about how the
+    // calendar reports a day, not about the logging flow, which is covered
+    // above.
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    const { exercises } = await (await page.request.get("/api/exercises")).json();
+    const id = (name: string) =>
+      exercises.find((e: { name: string }) => e.name === name)?.id as string;
+
+    await page.request.post("/api/entries", {
+      data: { exerciseId: id("Run"), performedTime: "07:00", localDate: today, sets: 1, distanceM: 5000, durationSec: 1650 },
+    });
+    // Deliberately not a movement another test filters the day list on: these
+    // entries outlive this test, and two matching rows would break the strict
+    // locator in the retiming test below.
+    await page.request.post("/api/entries", {
+      data: { exerciseId: id("Bench press"), performedTime: "17:00", localDate: today, sets: 4, reps: 10 },
+    });
+
+    await page.goto("/calendar");
+    // A day that carried both is washed in the strength colour and ringed in
+    // the cardio one; the label has to say so for anyone who cannot see that.
+    await expect(
+      page.getByRole("link", { name: new RegExp(`^${today}: .*effective sets.*cardio MET-minutes`) }),
+    ).toBeVisible();
+  });
+
   test("the balance marker appears on stats", async ({ page }) => {
     await page.goto("/stats");
 
@@ -141,5 +179,121 @@ test.describe("cardio and steps", () => {
     // The marker is a labelled image so the position is never carried by
     // colour alone.
     await expect(page.getByRole("img", { name: /Training balance/ })).toBeVisible();
+  });
+});
+
+/**
+ * The retiming path. A run done at 06:30 and only logged in the evening has to
+ * be movable to the morning, or every timing measure in the app is really a
+ * measure of when the user reached for their phone.
+ */
+test.describe("when it happened", () => {
+  test("an entry can be filed at the time it was actually done", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Log a snack" }).click();
+    await page.getByRole("tab", { name: "Manual" }).click();
+    await page.getByLabel("Exercise", { exact: true }).fill("Goblet");
+    await page.getByRole("button", { name: "Goblet squat", exact: true }).click();
+    await page.getByLabel("Time", { exact: true }).fill("06:30");
+    await page.getByRole("button", { name: "Log it" }).click();
+
+    const entry = page.getByRole("listitem").filter({ hasText: "Goblet squat" });
+    await expect(entry).toBeVisible();
+    await expect(entry.getByRole("time")).toHaveText("06:30");
+
+    // And it can be corrected afterwards, which is the case that matters: the
+    // run you forgot to log until the evening.
+    await entry.getByRole("button", { name: "Edit Goblet squat" }).click();
+    await page.getByLabel("Time", { exact: true }).fill("18:45");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(page.getByRole("listitem").filter({ hasText: "Goblet squat" }).getByRole("time"))
+      .toHaveText("18:45");
+
+    // The day now has something logged, so it is scored for how it was spread.
+    await expect(page.getByText("Spread through the day")).toBeVisible();
+
+    await page.getByRole("listitem").filter({ hasText: "Goblet squat" })
+      .getByRole("button", { name: "Edit Goblet squat" }).click();
+    await page.getByRole("button", { name: "Delete entry" }).click();
+  });
+
+  test("the day opens with a suggestion of what to train next", async ({ page }) => {
+    await page.goto("/");
+    // Named, reasoned and tappable — never a bare colour or an unexplained pick.
+    await expect(page.getByRole("button", { name: /^Log .+ — / })).toBeVisible();
+  });
+});
+
+/**
+ * The wire contract for a stated time, at the level the unit tests cannot
+ * reach. Both halves are independently optional, and each used to be quietly
+ * dropped when it arrived alone: a time without a day was stamped "now", and a
+ * day without a time validated and wrote nothing.
+ */
+test.describe("stating when, one half at a time", () => {
+  test("a time with no day means today, and a day with no time keeps the clock", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    const { exercises } = await (await page.request.get("/api/exercises")).json();
+    const plank = exercises.find((e: { name: string }) => e.name === "Plank").id;
+
+    // A time, no day.
+    const created = await page.request.post("/api/entries", {
+      data: { exerciseId: plank, performedTime: "06:45", sets: 1, durationSec: 60 },
+    });
+    expect(created.ok()).toBe(true);
+    const { entries } = await created.json();
+    const id = entries[0].id;
+    expect(entries[0].localDate).toBe(today);
+
+    await page.goto(`/day/${today}`);
+    const entry = page.getByRole("listitem").filter({ hasText: "Plank" });
+    await expect(entry.getByRole("time")).toHaveText("06:45");
+
+    // A day, no time: the entry moves and keeps 06:45.
+    const yesterday = new Date(`${today}T12:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const moved = yesterday.toISOString().slice(0, 10);
+
+    const patched = await page.request.patch(`/api/entries/${id}`, {
+      data: { localDate: moved },
+    });
+    expect(patched.ok()).toBe(true);
+    expect((await patched.json()).entry.localDate).toBe(moved);
+
+    await page.goto(`/day/${moved}`);
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Plank" }).getByRole("time"),
+    ).toHaveText("06:45");
+
+    await page.request.delete(`/api/entries/${id}`);
+  });
+
+  test("the suggestion opens the manual tab even when voice is configured", async ({ page }) => {
+    // With a key present the sheet defaults to Voice, which never mounts the
+    // manual form — so the preselected movement was thrown away at the moment
+    // the user acted on the suggestion.
+    await page.request.put("/api/settings", {
+      data: { openrouterKey: "sk-or-v1-e2e-placeholder" },
+    });
+    try {
+      await page.goto("/");
+      await page.getByRole("button", { name: /^Log .+ — / }).click();
+
+      await expect(page.getByRole("tab", { name: "Manual" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      // And the movement it named is already chosen, so logging it is one tap.
+      await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Log it" })).toBeEnabled();
+    } finally {
+      await page.request.put("/api/settings", { data: { openrouterKey: "" } });
+    }
   });
 });

@@ -13,6 +13,8 @@ import {
 } from "@/lib/dates";
 import { api } from "@/lib/client";
 import { shadeIntensity } from "@/lib/scoring";
+import { MET_MIN_PER_EFFECTIVE_SET } from "@/lib/balance";
+import type { DayLoad } from "@/lib/queries";
 
 export function CalendarView({
   initialMonth,
@@ -20,8 +22,8 @@ export function CalendarView({
   today,
 }: {
   initialMonth: LocalDate;
-  /** Total effective sets per day, keyed by "YYYY-MM-DD". */
-  initialLoad: Record<string, number>;
+  /** Each day's strength and cardio load, keyed by "YYYY-MM-DD". */
+  initialLoad: Record<string, DayLoad>;
   today: LocalDate;
 }) {
   const router = useRouter();
@@ -42,7 +44,7 @@ export function CalendarView({
     setLoading(true);
     try {
       const grid = monthGrid(next).flat();
-      const result = await api<{ load: Record<string, number> }>(
+      const result = await api<{ load: Record<string, DayLoad> }>(
         `/api/calendar?start=${grid[0]}&end=${grid[grid.length - 1]}`,
       );
       setLoad((current) => ({ ...current, ...result.load }));
@@ -51,23 +53,27 @@ export function CalendarView({
     }
   }
 
+  // Streaks, active days and the month total count the whole dose: a day of
+  // running is a day you trained. Only the colouring splits the two apart.
+  const totalFor = (date: string) => load[date]?.total ?? 0;
+
   const monthDays = weeks.flat().filter((d) => parseLocalDate(d).getMonth() === currentMonth);
-  const activeDays = monthDays.filter((d) => (load[d] ?? 0) > 0).length;
-  const monthTotal = monthDays.reduce((sum, d) => sum + (load[d] ?? 0), 0);
+  const activeDays = monthDays.filter((d) => totalFor(d) > 0).length;
+  const monthTotal = monthDays.reduce((sum, d) => sum + totalFor(d), 0);
 
   // Current streak counts back from today (or the month's last day when
   // viewing a past month), so it reads as "days in a row up to here".
   const upTo = monthDays.filter((d) => d <= today);
   let streak = 0;
   for (let i = upTo.length - 1; i >= 0; i--) {
-    if ((load[upTo[i]] ?? 0) > 0) streak += 1;
+    if (totalFor(upTo[i]) > 0) streak += 1;
     else break;
   }
 
   let longestGap = 0;
   let running = 0;
   for (const d of upTo) {
-    if ((load[d] ?? 0) > 0) running = 0;
+    if (totalFor(d) > 0) running = 0;
     else longestGap = Math.max(longestGap, ++running);
   }
 
@@ -100,8 +106,9 @@ export function CalendarView({
       >
         {weeks.flat().map((date) => {
           const inMonth = parseLocalDate(date).getMonth() === currentMonth;
-          const value = load[date] ?? 0;
-          const intensity = shadeIntensity(value, reference);
+          const day = load[date];
+          const intensity = shadeIntensity(day?.strength ?? 0, reference);
+          const cardioIntensity = shadeIntensity(day?.cardio ?? 0, reference);
           const isToday = date === today;
           const isFuture = date > today;
 
@@ -110,24 +117,44 @@ export function CalendarView({
               key={date}
               href={`/day/${date}`}
               prefetch={false}
-              aria-label={`${date}: ${value > 0 ? `${Math.round(value)} effective sets` : "nothing logged"}`}
+              aria-label={`${date}: ${describe(day)}`}
               className="relative grid aspect-square place-items-center rounded-lg text-sm tabular-nums transition-transform active:scale-95"
               style={{
+                // Keyed on the wash, not on the total: a cardio-only day has
+                // no wash to sit on, and leaving it transparent dropped it to
+                // the page background where it read as a rest day.
                 background:
-                  value > 0 ? "transparent" : inMonth ? "var(--surface)" : "transparent",
+                  intensity > 0 ? "transparent" : inMonth ? "var(--surface)" : "transparent",
+                // Today's ring is the text colour, not the accent: the accent
+                // is the cardio orange, and a cell already uses that to mean
+                // "this day carried cardio".
                 border: isToday
-                  ? "1.5px solid var(--accent)"
+                  ? "1.5px solid var(--text)"
                   : `1px solid ${inMonth ? "var(--border)" : "transparent"}`,
                 color: inMonth ? "var(--text)" : "var(--text-dim)",
                 opacity: isFuture ? 0.35 : inMonth ? 1 : 0.45,
               }}
             >
-              {/* Intensity wash sits behind the numeral so the date stays legible. */}
-              {value > 0 && (
+              {/* Strength washes the cell; cardio rings it. Same convention as
+                  the body map, so a square and a muscle are read the same way,
+                  and a running day is never mistaken for a lifting one. */}
+              {intensity > 0 && (
                 <span
                   aria-hidden
                   className="absolute inset-0 rounded-lg"
-                  style={{ background: "var(--accent)", opacity: intensity * 0.85 }}
+                  style={{ background: "var(--strength)", opacity: intensity * 0.85 }}
+                />
+              )}
+              {cardioIntensity > 0 && (
+                <span
+                  aria-hidden
+                  // Inset by a pixel so today's own ring, which sits on the
+                  // cell edge, cannot swallow it on a day that carried both.
+                  className="absolute inset-[1.5px] rounded-[7px]"
+                  style={{
+                    border: `${(1 + cardioIntensity).toFixed(1)}px solid var(--cardio)`,
+                    opacity: 0.45 + cardioIntensity * 0.55,
+                  }}
                 />
               )}
               <span className="relative z-10 font-medium">{parseLocalDate(date).getDate()}</span>
@@ -136,18 +163,28 @@ export function CalendarView({
         })}
       </div>
 
-      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-dim">
-        <span>Lighter</span>
-        <span className="flex gap-1">
-          {[0.15, 0.35, 0.6, 0.85].map((opacity) => (
-            <span
-              key={opacity}
-              className="h-3.5 w-3.5 rounded"
-              style={{ background: "var(--accent)", opacity }}
-            />
-          ))}
+      <div className="mt-6 flex flex-col items-center gap-1.5 text-xs text-dim">
+        <span className="flex items-center gap-2">
+          <span>Lighter</span>
+          <span className="flex gap-1">
+            {[0.15, 0.35, 0.6, 0.85].map((opacity) => (
+              <span
+                key={opacity}
+                className="h-3.5 w-3.5 rounded"
+                style={{ background: "var(--strength)", opacity }}
+              />
+            ))}
+          </span>
+          <span>Harder</span>
         </span>
-        <span>Harder</span>
+        <span className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-3.5 w-3.5 rounded"
+            style={{ border: "1.5px solid var(--cardio)" }}
+          />
+          Ringed days carried cardio
+        </span>
       </div>
 
       <section className="mt-6">
@@ -186,6 +223,20 @@ function Stat({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-base font-semibold tabular-nums">{value}</dd>
     </div>
   );
+}
+
+/** Both channels in words, so the split is never carried by colour alone. */
+function describe(day: DayLoad | undefined): string {
+  if (!day || day.total <= 0) return "nothing logged";
+
+  const parts: string[] = [];
+  if (day.strength > 0) parts.push(`${Math.round(day.strength)} effective sets`);
+  // Back into the unit the user would recognise from the day page and the
+  // balance bar; the stored figure is on the effective-set scale.
+  if (day.cardio > 0) {
+    parts.push(`${Math.round(day.cardio * MET_MIN_PER_EFFECTIVE_SET)} cardio MET-minutes`);
+  }
+  return parts.join(", ");
 }
 
 function NavButton({

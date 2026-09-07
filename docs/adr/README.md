@@ -18,6 +18,10 @@ accident.
 | [0007](./0007-steps-are-discounted-and-personally-baselined.md) | Steps count at half weight above a personal baseline | Accepted, contested |
 | [0008](./0008-cardio-stays-off-the-radar.md) | Cardio contributes no effective sets | Accepted |
 | [0009](./0009-active-days-ignores-steps.md) | `activeDays` stays "days with entries" | Accepted, contested |
+| [0010](./0010-cardio-is-a-second-radar-series.md) | Cardio gets a second radar series, not a share of the first | Accepted |
+| [0011](./0011-spacing-score.md) | Spacing is scored by gap concentration against a target frequency | Accepted |
+| [0012](./0012-times-are-typed-not-stamped.md) | A typed time beats an instant built in the browser | Accepted |
+| [0013](./0013-one-colour-one-quality.md) | One colour, one quality — and `--accent` is not one of them | Accepted |
 
 ## Format
 

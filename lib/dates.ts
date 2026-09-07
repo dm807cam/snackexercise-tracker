@@ -187,3 +187,81 @@ export function toLocalDateInZone(date: Date, timeZone?: string): LocalDate {
 }
 
 export const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"] as const;
+
+/**
+ * Minutes since local midnight for an instant, as seen in the given zone.
+ *
+ * The spacing metric asks *when in the day* something happened, which is a
+ * question about the wall clock the user was looking at, not about the
+ * container's clock. Built from the same formatted parts as `formatTime` so the
+ * two can never disagree about what hour an entry belongs to.
+ */
+export function minutesOfDayInZone(date: Date, timeZone?: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  // ICU renders midnight as "24" in some locales; the app always means 0.
+  return ((hour === 24 ? 0 : hour) % 24) * 60 + minute;
+}
+
+/** Offset in ms between the given zone and UTC at a particular instant. */
+function zoneOffsetMs(timestamp: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(timestamp));
+
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
+  const hour = get("hour") === 24 ? 0 : get("hour");
+  const asIfUtc = Date.UTC(get("year"), get("month") - 1, get("day"), hour, get("minute"), get("second"));
+  return asIfUtc - timestamp;
+}
+
+/**
+ * The instant at which a given wall-clock time occurred in a given zone —
+ * "2026-09-07" at "06:30" in Europe/Berlin, whatever the server's own TZ is.
+ *
+ * This is the inverse of `toLocalDateInZone`, and it is what makes editing an
+ * entry's time trustworthy: the browser may sit in a different zone from the
+ * one the app is configured for, so the time is sent as the digits the user
+ * typed and resolved here, once, against the app's zone. Sending an instant
+ * built in the browser instead would silently shift a 06:30 run to 07:30 —
+ * or across a day boundary — for anyone travelling.
+ *
+ * Resolved by guess-and-correct rather than by a table: take the wall clock as
+ * if it were UTC, subtract the zone's offset at that moment, then re-read the
+ * offset at the answer. The second reading only differs across a DST boundary,
+ * where the first guess landed on the wrong side of the transition.
+ */
+export function zonedDateTimeToInstant(
+  date: LocalDate,
+  time: string,
+  timeZone?: string,
+): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+
+  if (!timeZone) return new Date(y, m - 1, d, hours, minutes, 0, 0);
+
+  const asIfUtc = Date.UTC(y, m - 1, d, hours, minutes, 0, 0);
+  const firstPass = asIfUtc - zoneOffsetMs(asIfUtc, timeZone);
+  const corrected = asIfUtc - zoneOffsetMs(firstPass, timeZone);
+  return new Date(corrected);
+}
+
+/** "HH:MM" on the wall clock of the given zone. Alias of formatTime, named for intent. */
+export function timeInputValue(date: Date, timeZone?: string): string {
+  return formatTime(date, timeZone);
+}

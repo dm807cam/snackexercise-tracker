@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sheet } from "@/components/Sheet";
 import { api } from "@/lib/client";
 import type { Units } from "@/lib/format";
@@ -13,6 +13,7 @@ import type { ExerciseOption } from "./types";
 export function QuickAdd({
   open,
   date,
+  initialExerciseId,
   units,
   exercises,
   recentIds,
@@ -23,6 +24,8 @@ export function QuickAdd({
 }: {
   open: boolean;
   date: LocalDate;
+  /** Preselected movement, when the sheet was opened from the suggestion bar. */
+  initialExerciseId?: string;
   units: Units;
   exercises: ExerciseOption[];
   recentIds: string[];
@@ -34,14 +37,28 @@ export function QuickAdd({
   const [tab, setTab] = useState<"voice" | "manual">(hasKey ? "voice" : "manual");
   const [busy, setBusy] = useState(false);
 
+  // A preselected movement is a manual-tab thing: the Voice tab never mounts
+  // ManualForm, so opening there would silently throw the suggestion away at
+  // the moment the user acted on it. Only forced on open, so someone who then
+  // switches to Voice is left alone.
+  useEffect(() => {
+    if (open && initialExerciseId) setTab("manual");
+  }, [open, initialExerciseId]);
+
   async function saveManual(draft: ManualDraft) {
     setBusy(true);
     try {
+      const { performedTime, ...fields } = draft;
       await api("/api/entries", {
         method: "POST",
         body: JSON.stringify({
-          ...draft,
-          performedAt: resolvePerformedAt(date, null).toISOString(),
+          ...fields,
+          // A stated time is sent as the digits typed and resolved server-side
+          // in the app's zone. With none stated the old behaviour stands: now
+          // when logging today, midday when back-filling.
+          ...(performedTime
+            ? { performedTime }
+            : { performedAt: resolvePerformedAt(date, null).toISOString() }),
           localDate: date,
           source: "manual",
         }),
@@ -93,9 +110,14 @@ export function QuickAdd({
         />
       ) : (
         <ManualForm
+          // Remount when the suggestion changes, so the preselected movement
+          // actually reaches the form's initial state rather than being
+          // ignored by a component that is already mounted.
+          key={initialExerciseId ?? "blank"}
           exercises={exercises}
           recentIds={recentIds}
           units={units}
+          initial={initialExerciseId ? { exerciseId: initialExerciseId } : undefined}
           submitLabel="Log it"
           onSubmit={saveManual}
           busy={busy}

@@ -3,12 +3,14 @@
  * scoring maths in lib/scoring.ts so that file stays trivially testable.
  */
 
+import { cache } from "react";
 import { prisma } from "./db";
 import {
   type LocalDate,
   addDays,
   daysBetween,
   enumerateDates,
+  minutesOfDayInZone,
   previousWindowRange,
   todayLocalDate,
   windowRange,
@@ -25,7 +27,6 @@ import {
   muscleCardioLoad,
 } from "./scoring";
 import {
-  CARDIO_TARGET_MET_MIN_PER_WEEK,
   DEFAULT_STEP_BASELINE,
   entryMetMinutes,
   impliedStepsFromEntries,
@@ -34,7 +35,14 @@ import {
   type StepSettings,
   type StepsMode,
 } from "./cardio";
-import { buildBalance, STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK } from "./balance";
+import { buildBalance, effectiveSetEquivalents } from "./balance";
+import {
+  DEFAULT_ACTIVE_WINDOW,
+  daySpacing,
+  summariseSpacing,
+  type ActiveWindow,
+  type SpacingResult,
+} from "./spacing";
 
 /** The exercise fields every scoring path needs. */
 const entryInclude = {
@@ -87,45 +95,95 @@ export async function getEntriesInRange(
   return rows as unknown as EntryWithExercise[];
 }
 
-export async function getDaySummary(date: LocalDate): Promise<DaySummary & {
+export async function getDaySummary(
+  date: LocalDate,
+  timeZone?: string,
+): Promise<DaySummary & {
   entries: EntryWithExercise[];
   steps: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
+  spacing: SpacingResult;
 }> {
-  const [entries, steps] = await Promise.all([getEntriesForDate(date), getSteps(date)]);
+  const [entries, steps, activeWindow] = await Promise.all([
+    getEntriesForDate(date),
+    getSteps(date),
+    getActiveWindow(),
+  ]);
   return {
     ...summariseDay(date, entries),
     entries,
     steps,
     cardioMuscles: muscleCardioLoad(entries, entryMetMinutes),
     metMinutes: Math.round(entries.reduce((sum, e) => sum + entryMetMinutes(e), 0)),
+    spacing: daySpacing(
+      entries.map((e) => minutesOfDayInZone(e.performedAt, timeZone)),
+      activeWindow,
+    ),
   };
 }
 
 /**
- * Per-day training load across a range — powers the calendar's intensity wash.
+ * The hours the user is normally up and about, which is the window the spacing
+ * metric scores a day against.
  *
- * Effective sets alone would render a 10 km run as an empty square, so this is
- * the COMBINED dose: strength and cardio each expressed as a fraction of their
- * own weekly guideline, added, and scaled back into effective-set units so the
- * calendar's existing reference and legend keep their meaning. Sharing the
- * currency with the balance marker is the point — the calendar and the marker
- * can then never disagree about what a day contained.
+ * A default rather than a fixed constant because "spread through the day" means
+ * something different to a night-shift nurse, and scoring their 22:00 session
+ * as a badly timed one would make the whole metric something to ignore.
+ */
+export async function getActiveWindow(): Promise<ActiveWindow> {
+  const settings = await getSettings();
+  const startHour = Number(settings.dayStartHour);
+  const endHour = Number(settings.dayEndHour);
+
+  const start = Number.isInteger(startHour) && startHour >= 0 && startHour <= 23
+    ? startHour
+    : DEFAULT_ACTIVE_WINDOW.startHour;
+  const end = Number.isInteger(endHour) && endHour >= 1 && endHour <= 24
+    ? endHour
+    : DEFAULT_ACTIVE_WINDOW.endHour;
+
+  return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
+}
+
+/** A day's training, split by quality and totalled. All on the effective-set scale. */
+export interface DayLoad {
+  /** Effective sets of resistance work. */
+  strength: number;
+  /** The day's MET-minutes, carried onto the effective-set scale. */
+  cardio: number;
+  /** The two added — the day's whole dose, and what streaks and totals count. */
+  total: number;
+}
+
+/**
+ * Per-day training load across a range — powers the calendar.
+ *
+ * Effective sets alone would render a 10 km run as an empty square, so both
+ * qualities are here: strength as it stands, cardio converted by the guideline
+ * exchange rate in lib/balance.ts. Sharing that currency with the balance
+ * marker and the radar is the point — no two views of the app can then
+ * disagree about what a run was worth.
+ *
+ * They are returned SEPARATELY as well as summed, because the calendar colours
+ * them separately: a day is washed in the strength colour and ringed in the
+ * cardio one, the same convention the body map uses. `total` is what streaks,
+ * active days and month totals count, and is exactly the number this function
+ * used to return on its own.
  *
  * Returns only days that carry something.
  */
 export async function getDailyLoad(
   start: LocalDate,
   end: LocalDate,
-): Promise<Record<LocalDate, number>> {
+): Promise<Record<LocalDate, DayLoad>> {
   const [entries, stepsByDate, stepSettings] = await Promise.all([
     getEntriesInRange(start, end),
     getStepsInRange(start, end),
     getStepSettings(),
   ]);
 
-  const byDay: Record<string, number> = {};
+  const byDay: Record<string, DayLoad> = {};
   const entriesByDate = new Map<string, EntryWithExercise[]>();
 
   for (const entry of entries) {
@@ -152,12 +210,16 @@ export async function getDailyLoad(
 
     // A day at the weekly guideline pace for both qualities scores the same as
     // a day of (target / 7) effective sets did before cardio existed.
-    const dose =
-      effectiveSets / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK +
-      metMinutes / CARDIO_TARGET_MET_MIN_PER_WEEK;
+    const cardio = effectiveSetEquivalents(metMinutes);
+    const total = effectiveSets + cardio;
 
-    const scaled = dose * STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK;
-    if (scaled > 0) byDay[date] = scaled;
+    if (total > 0) {
+      byDay[date] = {
+        strength: round(effectiveSets),
+        cardio: round(cardio),
+        total: round(total),
+      };
+    }
   }
 
   return byDay;
@@ -294,10 +356,19 @@ export async function getRecentExerciseIds(limit = 12): Promise<string[]> {
   return rows.map((r) => r.exerciseId);
 }
 
-export async function getSettings(): Promise<Record<string, string>> {
+/**
+ * Every setting, memoised for the life of one request.
+ *
+ * Five callers ask for these on a single day-page render — the timezone, the
+ * units, the step mode, the step baseline and the active window — and each was
+ * its own table scan. React's `cache` collapses them into one without any
+ * caller having to know the others exist, and it is per-request, so a change
+ * saved in Settings is visible on the very next render.
+ */
+export const getSettings = cache(async (): Promise<Record<string, string>> => {
   const rows = await prisma.setting.findMany();
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
-}
+});
 
 export async function getSetting(key: string): Promise<string | null> {
   const row = await prisma.setting.findUnique({ where: { key } });
@@ -321,19 +392,38 @@ export async function getFirstLoggedDate(): Promise<LocalDate | null> {
  * six — the two would drift and the tab you landed on would decide what the
  * numbers meant.
  */
-export async function loadStats(windowDays: number, today: LocalDate = todayLocalDate()) {
+export async function loadStats(
+  windowDays: number,
+  today: LocalDate = todayLocalDate(),
+  timeZone?: string,
+  /**
+   * Whether to scan the equivalent preceding window for the radar's trend
+   * overlay. The day page asks for stats only to place its suggestion, which
+   * reads none of the previous-period fields, and that scan is the single
+   * biggest cost on a page that re-renders after every logged set.
+   */
+  comparePrevious = true,
+) {
   const current = windowRange(windowDays, today);
   const previous = previousWindowRange(windowDays, today);
 
-  const [currentEntries, previousEntries, lastTrained, lastCardio, steps, stepSettings] =
-    await Promise.all([
-      getEntriesInRange(current.start, current.end),
-      getEntriesInRange(previous.start, previous.end),
-      getLastTrainedByAxis(),
-      getLastCardioDate(),
-      getStepsInRange(current.start, current.end),
-      getStepSettings(today),
-    ]);
+  const [
+    currentEntries,
+    previousEntries,
+    lastTrained,
+    lastCardio,
+    steps,
+    stepSettings,
+    activeWindow,
+  ] = await Promise.all([
+    getEntriesInRange(current.start, current.end),
+    comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
+    getLastTrainedByAxis(),
+    getLastCardioDate(),
+    getStepsInRange(current.start, current.end),
+    getStepSettings(today),
+    getActiveWindow(),
+  ]);
 
   const balance = buildBalance({
     windowDays,
@@ -341,6 +431,19 @@ export async function loadStats(windowDays: number, today: LocalDate = todayLoca
     stepsByDate: steps,
     stepSettings,
   });
+
+  const minutesByDate = new Map<string, number[]>();
+  for (const entry of currentEntries) {
+    const minutes = minutesByDate.get(entry.localDate);
+    const at = minutesOfDayInZone(entry.performedAt, timeZone);
+    if (minutes) minutes.push(at);
+    else minutesByDate.set(entry.localDate, [at]);
+  }
+
+  const spacing = summariseSpacing(
+    [...minutesByDate].map(([date, minutes]) => [date, daySpacing(minutes, activeWindow)] as const),
+    activeWindow,
+  );
 
   return buildStats({
     windowDays,
@@ -353,8 +456,17 @@ export async function loadStats(windowDays: number, today: LocalDate = todayLoca
     balance,
     lastCardio,
     daysWithSteps: Object.keys(steps).length,
+    spacing,
+    // The radar's second series: MET-minutes carried onto the effective-set
+    // scale by the balance module's guideline exchange rate. Converted here,
+    // once, so the chart never has to know either currency.
+    cardioLoadFor: (entry) => effectiveSetEquivalents(entryMetMinutes(entry)),
   });
 }
 
 export { addDays, daysBetween, enumerateDates, todayLocalDate };
 export { DEFAULT_STEP_BASELINE };
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}

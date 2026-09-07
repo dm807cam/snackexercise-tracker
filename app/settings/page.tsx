@@ -1,6 +1,6 @@
 import { SettingsView } from "@/components/Settings";
 import { getAppConfig } from "@/lib/app-config";
-import { getExercises, getSettings, getStepSettings } from "@/lib/queries";
+import { getActiveWindow, getExercises, getSettings, getStepSettings } from "@/lib/queries";
 import { DEFAULT_MODEL } from "@/lib/openrouter";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,10 @@ export default async function SettingsPage() {
     getSettings(),
     getExercises(),
   ]);
-  const stepSettings = await getStepSettings(config.today);
+  const [stepSettings, activeWindow] = await Promise.all([
+    getStepSettings(config.today),
+    getActiveWindow(),
+  ]);
 
   return (
     <SettingsView
@@ -23,6 +26,8 @@ export default async function SettingsPage() {
         stepsMode: stepSettings.mode,
         stepBaseline: settings.stepBaseline ?? "",
         resolvedBaseline: stepSettings.baseline,
+        dayStartHour: activeWindow.startHour,
+        dayEndHour: activeWindow.endHour,
       }}
       exercises={exercises}
     />

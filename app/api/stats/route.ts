@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   return handle(async () => {
     const windowDays = statsWindowSchema.parse(request.nextUrl.searchParams.get("window") ?? 30);
-    const { today } = await getAppConfig();
-    return loadStats(windowDays, today);
+    const { today, timeZone } = await getAppConfig();
+    return loadStats(windowDays, today, timeZone);
   });
 }

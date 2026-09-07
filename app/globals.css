@@ -20,6 +20,23 @@
   --border: oklch(0.9 0.006 90);
   --text: oklch(0.24 0.012 60);
   --text-dim: oklch(0.52 0.012 60);
+  /*
+    THE COLOUR RULE, in one place because it is broken by accident otherwise:
+
+      --accent    is INTERACTION. Buttons, the log FAB, the active nav tab, a
+                  selected chip, a link. It never encodes a quantity.
+      --strength  is RESISTANCE WORK, everywhere, and only that.
+      --cardio    is AEROBIC WORK, everywhere, and only that.
+      --timing    is WHEN IN THE DAY it happened — a third quality, which is
+                  why it is a third hue rather than a shade of either.
+
+    So the body map fills in --strength and outlines in --cardio, the radar
+    draws one line in each, the calendar washes a day in --strength and rings
+    it in --cardio, and the balance bar runs from one to the other. A mark that
+    means "how much" must never wear --accent: it is the same orange as
+    --cardio, deliberately, and a chart drawn in it would silently claim to be
+    about cardio.
+  */
   --accent: oklch(0.62 0.17 50);
   --accent-contrast: oklch(0.99 0 0);
   --danger: oklch(0.58 0.19 25);
@@ -38,6 +55,15 @@
   --strength: oklch(0.62 0.15 265);
   --cardio: oklch(0.62 0.17 50);
   --balance-mid: oklch(0.88 0.01 90);
+
+  /* Timing is a third quality, not a third intensity: "when in the day" is
+     neither strength nor cardio, and painting it in either colour would make
+     the spacing chart look like a claim about one of them. A teal at the same
+     lightness and chroma as the other two, far enough from both to stay
+     separable under protanopia and deuteranopia (checked, not eyeballed) —
+     though it never has to be told apart from them inside one chart, because
+     spacing is the only series on its own. */
+  --timing: oklch(0.62 0.12 175);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,6 +82,7 @@
     --strength: oklch(0.74 0.14 265);
     --cardio: oklch(0.74 0.16 58);
     --balance-mid: oklch(0.34 0.012 60);
+    --timing: oklch(0.74 0.11 175);
   }
 }
 

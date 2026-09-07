@@ -24,6 +24,8 @@ export function SettingsView({
     stepsMode: StepsMode;
     stepBaseline: string;
     resolvedBaseline: number;
+    dayStartHour: number;
+    dayEndHour: number;
   };
   exercises: ExerciseOption[];
 }) {
@@ -35,6 +37,8 @@ export function SettingsView({
   const [hasKey, setHasKey] = useState(initial.hasKey);
   const [stepsMode, setStepsMode] = useState<StepsMode>(initial.stepsMode);
   const [stepBaseline, setStepBaseline] = useState(initial.stepBaseline);
+  const [dayStartHour, setDayStartHour] = useState(initial.dayStartHour);
+  const [dayEndHour, setDayEndHour] = useState(initial.dayEndHour);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [editing, setEditing] = useState<ExerciseOption | null>(null);
   const [busy, setBusy] = useState(false);
@@ -238,6 +242,37 @@ export function SettingsView({
               if (file) importSteps(file);
             }}
           />
+        </Field>
+      </Section>
+
+      <Section title="Spreading it out">
+        <Field
+          label="Waking hours"
+          hint="The stretch the spacing score measures a day against. Snacks spread evenly across it score highest; everything crammed into one block scores lowest. Set it to the hours you are actually up — scoring a night-shift worker's 22:00 session as badly timed would just make the number something to ignore."
+        >
+          <div className="flex items-center gap-2">
+            <HourSelect
+              id="day-start-hour"
+              label="Start of the day"
+              value={dayStartHour}
+              hours={HOURS.filter((h) => h < dayEndHour)}
+              onChange={(value) => {
+                setDayStartHour(value);
+                save({ dayStartHour: String(value) });
+              }}
+            />
+            <span className="text-sm text-dim">to</span>
+            <HourSelect
+              id="day-end-hour"
+              label="End of the day"
+              value={dayEndHour}
+              hours={HOURS.slice(1).concat(24).filter((h) => h > dayStartHour)}
+              onChange={(value) => {
+                setDayEndHour(value);
+                save({ dayEndHour: String(value) });
+              }}
+            />
+          </div>
         </Field>
       </Section>
 
@@ -474,6 +509,40 @@ function MuscleEditor({
         Save mapping
       </button>
     </Sheet>
+  );
+}
+
+/** 0..23; the end select adds 24, which means midnight at the end of the day. */
+const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+
+function HourSelect({
+  id,
+  label,
+  value,
+  hours,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  hours: number[];
+  onChange: (value: number) => void;
+}) {
+  return (
+    <select
+      id={id}
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="flex-1 rounded-lg px-3 py-3 text-base tabular-nums"
+      style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+    >
+      {hours.map((hour) => (
+        <option key={hour} value={hour}>
+          {String(hour).padStart(2, "0")}:00
+        </option>
+      ))}
+    </select>
   );
 }
 

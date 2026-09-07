@@ -41,6 +41,15 @@ const EXAMPLES = [
   "20 push-ups, then 5 x 5 back squat at 80",
 ];
 
+/**
+ * The model is asked for "HH:MM" and mostly obliges, but a hallucinated 25:00
+ * would now be rejected by the server rather than quietly falling back the way
+ * resolvePerformedAt did. Check before trusting it.
+ */
+function isClockTime(value: string | null): value is string {
+  return value != null && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
 export function VoiceTab({
   date,
   units,
@@ -92,7 +101,12 @@ export function VoiceTab({
         muscles: p.matchedExerciseId ? undefined : (p.suggestedMuscles ?? undefined),
         cardioBias: p.matchedExerciseId ? undefined : (p.suggestedCardioBias ?? undefined),
         mets: p.matchedExerciseId ? undefined : (p.suggestedMets ?? undefined),
-        performedAt: resolvePerformedAt(date, p.timeHint).toISOString(),
+        // "I ran at half six this morning" is a time the speaker stated, so it
+        // travels as digits and is resolved in the app's zone. Without one the
+        // old behaviour stands: now for today, midday for a back-fill.
+        ...(isClockTime(p.timeHint)
+          ? { performedTime: p.timeHint }
+          : { performedAt: resolvePerformedAt(date, null).toISOString() }),
         localDate: date,
         sets: p.sets,
         reps: p.reps,

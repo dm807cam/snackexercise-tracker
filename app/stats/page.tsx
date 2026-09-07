@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 const DEFAULT_WINDOW = 30;
 
 export default async function StatsPage() {
-  const { today } = await getAppConfig();
-  const stats = await loadStats(DEFAULT_WINDOW, today);
+  const { today, timeZone } = await getAppConfig();
+  const stats = await loadStats(DEFAULT_WINDOW, today, timeZone);
 
   return <StatsView initial={stats as StatsPayload} />;
 }
