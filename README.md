@@ -20,9 +20,10 @@ swipe move between days. Tap a muscle to filter the list to it.
 **Calendar** — a month at a glance, each day shaded by how much work it carried,
 plus active days, current streak and longest gap. Tap any day to open it.
 
-**Stats** — a 12-axis radar of muscle coverage over the last 7 / 30 / 60 / 90 /
-180 days, with the previous equal period overlaid. Underneath, a list ordered by
-days since last trained. That list is the point of the app.
+**Stats** — a strength/cardio balance marker over the window, then a 12-axis
+radar of muscle coverage over the last 7 / 30 / 60 / 90 / 180 days, with the
+previous equal period overlaid. Underneath, a list ordered by days since last
+trained. That list is the point of the app.
 
 **Logging** — say it or type it. "Three sets of twelve kettlebell swings at 24
 kilos and a two minute plank" becomes two entries. Nothing is written until you
@@ -39,6 +40,33 @@ the time. Tonnage is shown alongside wherever weights exist, never guessed.
 Radar values are normalised to **effective sets per week**, so a 7-day window
 and a 180-day window are directly comparable rather than the longer one always
 looking like a triumph.
+
+### Cardio, steps, and the balance marker
+
+Cardio is logged like anything else — "ran 5k in 27 minutes" is one entry — but
+it is **not** scored in effective sets. A 40-minute run logged as one set would
+have the radar claim it delivered leg volume; logged as forty it would silence
+"needs attention" for legs for a fortnight. So each movement carries a
+`cardioBias` from 0 to 1, and effective sets are scaled by `1 - cardioBias`:
+pure cardio contributes nothing to the radar or the body map, and genuinely
+mixed movements — burpees, kettlebell swings, sled pushes — split in proportion.
+
+Cardio gets its own currency, **MET-minutes** (intensity x duration), taken from
+your heart rate if you logged one, otherwise from your pace, otherwise from the
+movement's typical cost. Steps count too, above a baseline and at half weight by
+default, with the steps from a logged run subtracted so your phone doesn't count
+the same run twice.
+
+The marker itself measures each side against **its own weekly guideline** — 60
+effective sets, 600 MET-minutes — and shows cardio's share of the total. That
+normalisation is the point: the middle means *on target for both*, not that two
+incompatible units happened to tie. It is drawn as a band rather than a needle,
+because the width is real, and it disappears entirely when there is too little
+logged to say anything honest.
+
+Under Settings you can turn step-counting off, or up to full weight, and set the
+baseline by hand instead of letting the app take the quiet quarter of your own
+days.
 
 ## Running it
 
@@ -79,6 +107,26 @@ flagged, with a suggested muscle mapping you can accept or change.
 The key is stored server-side and never sent to the browser or included in
 exports.
 
+### Steps from your phone
+
+The realistic way to get steps in is an automation. On iOS, a Shortcut:
+
+1. **Get Health Sample** — Steps, *Today*, Sum
+2. **Get Contents of URL** — `http://<your-host>:3000/api/metrics/` + today's
+   date as `yyyy-MM-dd`, method `PUT`, request body JSON
+   `{"steps": <the number>, "source": "shortcut"}`
+
+Add it to a personal automation at 23:50 daily. The endpoint upserts, so
+re-running it corrects the day rather than adding to it. On Android the same
+call works from Tasker or HTTP Shortcuts.
+
+There is no authentication on the app, so this needs nothing but the URL — which
+is also why it should stay on your own network.
+
+To backfill history, Settings takes a CSV with a date column and a steps column;
+an Apple Health, Google Fit or Fitbit export works as-is, and several rows for
+the same day are added together.
+
 ### Backups
 
 Everything lives in one SQLite file on the `snackexercise-data` volume.
@@ -89,10 +137,11 @@ docker compose cp app:/data/app.db ./backup-$(date +%F).db
 ```
 
 Settings → *Export everything* also produces a JSON file containing your entries
-**and** the exercise catalogue with its muscle weightings — entries alone
-couldn't reproduce the body map or radar. Importing adds to what's there and
-skips entries it recognises, so re-importing the same file won't double your
-history.
+**and** the exercise catalogue with its muscle and cardio weightings, **and**
+your daily step counts — entries alone couldn't reproduce the body map, the
+radar or the balance marker. Importing adds to what's there and skips entries it
+recognises, so re-importing the same file won't double your history. Exports
+from before cardio existed (`version: 1`) still restore.
 
 ## Development
 
@@ -129,10 +178,12 @@ components/
   BodyMap/           front/back diagrams and their geometry
   DayView/           day page: header, swipe, entry list
   QuickAdd/          the "Say it" / "Manual" sheet
-  Stats/             radar chart
+  Stats/             radar chart and the balance gradient
 lib/
   muscles.ts         muscle taxonomy — the single source of truth
   scoring.ts         effective-set aggregation (pure, unit tested)
+  cardio.ts          MET-minutes, pace equations, step credit (pure)
+  balance.ts         the strength/cardio index (pure)
   dates.ts           local-day arithmetic and formatting
   openrouter.ts      LLM client and response schema
 prisma/              schema, migrations, exercise catalogue seed
@@ -147,6 +198,13 @@ Three decisions worth knowing before changing things:
 - **Date labels are built from fixed tables, not `Intl` patterns.** Node and the
   browser ship different ICU data — the same date renders as `Sun 6 Sept` in one
   and `Sun, 6 Sept` in the other, which silently breaks React hydration.
+- **Steps are a `DailyMetric`, not a `SetEntry`.** They're a measurement of the
+  day, not something you did at a moment, and forcing them into the log would
+  inflate entry counts, set counts, active days and the calendar shading.
+
+The reasoning behind the cardio and steps design is written up in
+[docs/cardio-and-steps.md](./docs/cardio-and-steps.md), with the decisions
+recorded as ADRs in [docs/adr/](./docs/adr/).
 
 ## Attribution
 

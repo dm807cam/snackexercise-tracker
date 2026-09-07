@@ -16,26 +16,43 @@ interface BodyMapProps {
   /** Effective sets per muscle for the period being shown. */
   load: Partial<MuscleTotals>;
   /**
+   * MET-minutes of cardio per muscle, drawn as an outline rather than a fill.
+   * A separate channel on purpose: the fill means resistance work and must go
+   * on meaning that, but a figure showing nothing after a 10 km run is its own
+   * kind of lie.
+   */
+  cardioLoad?: Partial<MuscleTotals>;
+  /**
    * Value that counts as "fully worked". A fixed reference keeps shading
    * comparable between days, instead of every day re-normalising to its own
    * maximum and making one easy set look like a hard session.
    */
   reference?: number;
+  /** MET-minutes that count as "fully worked" for the cardio outline. */
+  cardioReference?: number;
   selected?: MuscleSlug | null;
   onSelect?: (muscle: MuscleSlug | null) => void;
 }
 
-export function BodyMap({ load, reference = 6, selected = null, onSelect }: BodyMapProps) {
+export function BodyMap({
+  load,
+  cardioLoad,
+  reference = 6,
+  cardioReference = 120,
+  selected = null,
+  onSelect,
+}: BodyMapProps) {
   // Touch devices have no hover, so a tap both selects and reveals the label.
   const [peek, setPeek] = useState<MuscleSlug | null>(null);
   const active = peek ?? selected;
   const activeValue = active ? (load[active] ?? 0) : 0;
+  const activeCardio = active ? (cardioLoad?.[active] ?? 0) : 0;
 
   return (
     <div>
       <div className="flex items-start justify-center gap-1">
-        <Figure view="front" load={load} reference={reference} active={active} onSelect={onSelect} onPeek={setPeek} />
-        <Figure view="back" load={load} reference={reference} active={active} onSelect={onSelect} onPeek={setPeek} />
+        <Figure view="front" load={load} cardioLoad={cardioLoad} reference={reference} cardioReference={cardioReference} active={active} onSelect={onSelect} onPeek={setPeek} />
+        <Figure view="back" load={load} cardioLoad={cardioLoad} reference={reference} cardioReference={cardioReference} active={active} onSelect={onSelect} onPeek={setPeek} />
       </div>
 
       <div className="mt-1 flex h-6 items-center justify-center text-sm">
@@ -44,6 +61,7 @@ export function BodyMap({ load, reference = 6, selected = null, onSelect }: Body
             <span className="font-medium">{muscleLabel(active)}</span>{" "}
             <span className="text-dim">
               {activeValue > 0 ? `${formatSets(activeValue)} effective sets` : "not trained"}
+              {activeCardio > 0 && ` · ${Math.round(activeCardio)} cardio MET-min`}
             </span>
           </span>
         ) : (
@@ -57,14 +75,18 @@ export function BodyMap({ load, reference = 6, selected = null, onSelect }: Body
 function Figure({
   view,
   load,
+  cardioLoad,
   reference,
+  cardioReference,
   active,
   onSelect,
   onPeek,
 }: {
   view: BodyView;
   load: Partial<MuscleTotals>;
+  cardioLoad?: Partial<MuscleTotals>;
   reference: number;
+  cardioReference: number;
   active: MuscleSlug | null;
   onSelect?: (muscle: MuscleSlug | null) => void;
   onPeek: (muscle: MuscleSlug | null) => void;
@@ -89,7 +111,9 @@ function Figure({
             key={region.region}
             region={region}
             load={load}
+            cardioLoad={cardioLoad}
             reference={reference}
+            cardioReference={cardioReference}
             active={active}
             onSelect={onSelect}
             onPeek={onPeek}
@@ -106,14 +130,18 @@ function Figure({
 function Region({
   region,
   load,
+  cardioLoad,
   reference,
+  cardioReference,
   active,
   onSelect,
   onPeek,
 }: {
   region: BodyRegion;
   load: Partial<MuscleTotals>;
+  cardioLoad?: Partial<MuscleTotals>;
   reference: number;
+  cardioReference: number;
   active: MuscleSlug | null;
   onSelect?: (muscle: MuscleSlug | null) => void;
   onPeek: (muscle: MuscleSlug | null) => void;
@@ -125,6 +153,9 @@ function Region({
   const values = region.muscles.map((m) => load[m] ?? 0);
   const value = Math.max(0, ...values);
   const intensity = shadeIntensity(value, reference);
+
+  const cardioValue = Math.max(0, ...region.muscles.map((m) => cardioLoad?.[m] ?? 0));
+  const cardioIntensity = shadeIntensity(cardioValue, cardioReference);
 
   // Selecting reports the muscle that actually earned the shading.
   const primary = region.muscles[values.indexOf(value)] ?? region.muscles[0];
@@ -142,7 +173,11 @@ function Region({
     <g
       role="button"
       tabIndex={0}
-      aria-label={`${label}: ${formatSets(value)} effective sets`}
+      aria-label={
+        cardioValue > 0
+          ? `${label}: ${formatSets(value)} effective sets, ${Math.round(cardioValue)} cardio MET-minutes`
+          : `${label}: ${formatSets(value)} effective sets`
+      }
       className="cursor-pointer outline-none"
       onClick={toggle}
       onKeyDown={(e) => {
@@ -162,8 +197,18 @@ function Region({
           points={points}
           fill="var(--accent)"
           fillOpacity={intensity}
-          stroke={isActive ? "var(--text)" : "var(--muscle-outline)"}
-          strokeWidth={isActive ? 0.9 : 0.3}
+          // Cardio is an outline in its own colour, never a fill: the two
+          // channels must stay distinguishable at a glance, and adding them
+          // would put a run back into the hypertrophy reading.
+          stroke={
+            isActive
+              ? "var(--text)"
+              : cardioIntensity > 0
+                ? "var(--cardio)"
+                : "var(--muscle-outline)"
+          }
+          strokeWidth={isActive ? 0.9 : cardioIntensity > 0 ? 0.4 + cardioIntensity : 0.3}
+          strokeOpacity={isActive || cardioIntensity === 0 ? 1 : 0.4 + cardioIntensity * 0.6}
           strokeLinejoin="round"
           style={{ transition: "fill-opacity 180ms ease, stroke-width 120ms ease" }}
         />

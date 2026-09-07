@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { fromKg, toKg, type Units } from "@/lib/format";
+import { distanceUnitsFor, fromKg, fromMetres, toKg, toMetres, type Units } from "@/lib/format";
 import type { ExerciseOption } from "./types";
 
 export interface ManualDraft {
@@ -10,6 +10,8 @@ export interface ManualDraft {
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
+  distanceM: number | null;
+  avgHeartRate: number | null;
   notes: string | null;
 }
 
@@ -40,9 +42,20 @@ export function ManualForm({
   const [minutes, setMinutes] = useState(
     initial?.durationSec != null ? String(round1(initial.durationSec / 60)) : "",
   );
+  const [distance, setDistance] = useState(
+    initial?.distanceM != null ? String(round2(fromMetres(initial.distanceM, units))) : "",
+  );
+  const [heartRate, setHeartRate] = useState(
+    initial?.avgHeartRate != null ? String(initial.avgHeartRate) : "",
+  );
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const selected = exercises.find((e) => e.id === exerciseId) ?? null;
+  // Distance and heart rate are asked for only where they mean something. A
+  // bench press has no pace, and four dead fields on a phone is four fields to
+  // scroll past at the top of the stairs.
+  const isCardio = (selected?.cardioBias ?? 0) > 0;
+  const distanceUnits = distanceUnitsFor(units);
 
   // Recently used first: an alphabetical list of 67 movements is the wrong
   // default when you do the same six things most weeks.
@@ -68,6 +81,9 @@ export function ManualForm({
     const weightValue = weight.trim() === "" ? null : Number(weight);
     const minutesValue = minutes.trim() === "" ? null : Number(minutes);
 
+    const distanceValue = distance.trim() === "" ? null : Number(distance);
+    const heartRateValue = heartRate.trim() === "" ? null : Number(heartRate);
+
     onSubmit({
       exerciseId,
       sets: Math.max(1, Number(sets) || 1),
@@ -75,6 +91,12 @@ export function ManualForm({
       weightKg: weightValue == null || Number.isNaN(weightValue) ? null : toKg(weightValue, units),
       durationSec:
         minutesValue == null || Number.isNaN(minutesValue) ? null : Math.round(minutesValue * 60),
+      distanceM:
+        distanceValue == null || Number.isNaN(distanceValue)
+          ? null
+          : Math.round(toMetres(distanceValue, units)),
+      avgHeartRate:
+        heartRateValue == null || Number.isNaN(heartRateValue) ? null : Math.round(heartRateValue),
       notes: notes.trim() === "" ? null : notes.trim(),
     });
   }
@@ -137,6 +159,27 @@ export function ManualForm({
         />
       </div>
 
+      {isCardio && (
+        <div className="grid grid-cols-2 gap-2">
+          <NumberField
+            label={`Distance (${distanceUnits})`}
+            value={distance}
+            onChange={setDistance}
+            placeholder="—"
+            step="0.1"
+            min={0}
+          />
+          <NumberField
+            label="Avg heart rate"
+            value={heartRate}
+            onChange={setHeartRate}
+            placeholder="—"
+            step="1"
+            min={20}
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <NumberField
           label="Duration (min)"
@@ -162,7 +205,9 @@ export function ManualForm({
       </div>
 
       <p className="text-xs text-dim">
-        Reps, weight and duration are all optional — log what you actually know.
+        {isCardio
+          ? "Distance, duration and heart rate are all optional — but a pace or a heart rate is what makes the effort count properly."
+          : "Reps, weight and duration are all optional — log what you actually know."}
       </p>
 
       <button
@@ -217,4 +262,8 @@ function NumberField({
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

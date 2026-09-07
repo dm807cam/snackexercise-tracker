@@ -6,6 +6,8 @@ import { api } from "@/lib/client";
 import { Toast, type ToastState } from "@/components/Toast";
 import { MUSCLES, muscleLabel } from "@/lib/muscles";
 import type { Units } from "@/lib/format";
+import { parseStepCsv } from "@/lib/steps-csv";
+import type { StepsMode } from "@/lib/cardio";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
 import { ModelPicker } from "./ModelPicker";
@@ -14,7 +16,15 @@ export function SettingsView({
   initial,
   exercises,
 }: {
-  initial: { units: Units; timezone: string; model: string; hasKey: boolean };
+  initial: {
+    units: Units;
+    timezone: string;
+    model: string;
+    hasKey: boolean;
+    stepsMode: StepsMode;
+    stepBaseline: string;
+    resolvedBaseline: number;
+  };
   exercises: ExerciseOption[];
 }) {
   const router = useRouter();
@@ -23,10 +33,13 @@ export function SettingsView({
   const [model, setModel] = useState(initial.model);
   const [apiKey, setApiKey] = useState("");
   const [hasKey, setHasKey] = useState(initial.hasKey);
+  const [stepsMode, setStepsMode] = useState<StepsMode>(initial.stepsMode);
+  const [stepBaseline, setStepBaseline] = useState(initial.stepBaseline);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [editing, setEditing] = useState<ExerciseOption | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const stepsInput = useRef<HTMLInputElement>(null);
 
   async function save(patch: Record<string, string>) {
     setBusy(true);
@@ -45,12 +58,15 @@ export function SettingsView({
     setBusy(true);
     try {
       const text = await file.text();
-      const result = await api<{ imported: number; skipped: number }>("/api/import", {
-        method: "POST",
-        body: text,
-      });
+      const result = await api<{ imported: number; skipped: number; metrics: number }>(
+        "/api/import",
+        { method: "POST", body: text },
+      );
       setToast({
-        message: `Imported ${result.imported} entries${result.skipped ? `, skipped ${result.skipped} duplicates` : ""}`,
+        message:
+          `Imported ${result.imported} entries` +
+          `${result.skipped ? `, skipped ${result.skipped} duplicates` : ""}` +
+          `${result.metrics ? `, ${result.metrics} days of steps` : ""}`,
       });
       router.refresh();
     } catch (error) {
@@ -58,6 +74,46 @@ export function SettingsView({
     } finally {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function importSteps(file: File) {
+    setBusy(true);
+    try {
+      const { days, skipped } = parseStepCsv(await file.text());
+      if (days.length === 0) {
+        setToast({
+          message: "No readable rows. The file needs a date column and a steps column.",
+          tone: "error",
+        });
+        return;
+      }
+
+      // Chunked: a decade of Health data is more days than one request should
+      // carry, and a partial import is recoverable where a rejected one is not.
+      let written = 0;
+      for (let i = 0; i < days.length; i += 1000) {
+        const chunk = days.slice(i, i + 1000);
+        await api("/api/metrics", {
+          method: "POST",
+          body: JSON.stringify({
+            days: chunk.map((d) => ({ ...d, source: "import" as const })),
+          }),
+        });
+        written += chunk.length;
+      }
+
+      setToast({
+        message: `Imported ${written} ${written === 1 ? "day" : "days"} of steps${
+          skipped ? `, skipped ${skipped} unreadable ${skipped === 1 ? "row" : "rows"}` : ""
+        }`,
+      });
+      router.refresh();
+    } catch (error) {
+      setToast({ message: (error as Error).message, tone: "error" });
+    } finally {
+      setBusy(false);
+      if (stepsInput.current) stepsInput.current.value = "";
     }
   }
 
@@ -101,6 +157,86 @@ export function SettingsView({
             placeholder="Europe/Berlin"
             className="w-full rounded-lg px-3 py-3 text-base"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
+        </Field>
+      </Section>
+
+      <Section title="Steps and cardio">
+        <Field
+          label="Count walking toward cardio"
+          hint={
+            stepsMode === "off"
+              ? "Only logged cardio counts. Steps are still recorded and shown."
+              : stepsMode === "half"
+                ? "Walking above your baseline counts at half weight. It is activity, which is not quite the same as training — the balance marker asks about training."
+                : "Walking above your baseline counts in full, the way public health guidelines count it."
+          }
+        >
+          <div
+            className="grid grid-cols-3 gap-1 rounded-lg p-1"
+            style={{ background: "var(--surface-2)" }}
+          >
+            {(["off", "half", "full"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setStepsMode(value);
+                  save({ stepsMode: value });
+                }}
+                className="tap rounded-md py-2 text-sm font-medium capitalize"
+                style={{
+                  background: stepsMode === value ? "var(--surface)" : "transparent",
+                  color: stepsMode === value ? "var(--text)" : "var(--text-dim)",
+                }}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field
+          label="Step baseline"
+          hint={`Steps below this are ordinary living rather than training, so they earn no cardio credit. Leave it empty and the app uses the quiet quarter of your own days — currently ${initial.resolvedBaseline.toLocaleString()}.`}
+        >
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={stepBaseline}
+            onChange={(e) => setStepBaseline(e.target.value)}
+            onBlur={() =>
+              stepBaseline !== initial.stepBaseline && save({ stepBaseline: stepBaseline.trim() })
+            }
+            placeholder={`auto (${initial.resolvedBaseline.toLocaleString()})`}
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
+        </Field>
+
+        <Field
+          label="Import step history"
+          hint="A CSV with a date column and a steps column — an Apple Health, Google Fit or Fitbit export will do. Several rows for one day are added together."
+        >
+          <button
+            type="button"
+            onClick={() => stepsInput.current?.click()}
+            disabled={busy}
+            className="w-full rounded-lg py-3 text-sm font-semibold disabled:opacity-40"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          >
+            Choose a CSV
+          </button>
+          <input
+            ref={stepsInput}
+            type="file"
+            accept="text/csv,.csv,.tsv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importSteps(file);
+            }}
           />
         </Field>
       </Section>

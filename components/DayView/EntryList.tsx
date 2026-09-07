@@ -11,9 +11,16 @@ export interface DayEntry {
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
+  distanceM: number | null;
+  avgHeartRate: number | null;
   notes: string | null;
   source: string;
-  exercise: { id: string; name: string; muscles: { muscle: string; weight: number }[] };
+  exercise: {
+    id: string;
+    name: string;
+    cardioBias: number;
+    muscles: { muscle: string; weight: number }[];
+  };
 }
 
 export function EntryList({

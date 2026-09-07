@@ -43,7 +43,11 @@ async function resolveExerciseId(input: EntryInput): Promise<string> {
     data: {
       name,
       slug,
-      category: "other",
+      // A new movement that is mostly aerobic is filed as cardio, so the manual
+      // form offers it distance and heart rate next time rather than reps.
+      category: (input.cardioBias ?? 0) >= 0.5 ? "cardio" : "other",
+      cardioBias: input.cardioBias ?? 0,
+      mets: input.mets ?? null,
       isCustom: true,
       muscles: { create: input.muscles.map((m) => ({ muscle: m.muscle, weight: m.weight })) },
     },
@@ -69,6 +73,8 @@ export async function createEntry(input: EntryInput) {
       reps: input.reps ?? null,
       weightKg: input.weightKg ?? null,
       durationSec: input.durationSec ?? null,
+      distanceM: input.distanceM ?? null,
+      avgHeartRate: input.avgHeartRate ?? null,
       notes: input.notes ?? null,
       source: input.source,
     },
@@ -77,7 +83,10 @@ export async function createEntry(input: EntryInput) {
         select: {
           id: true,
           name: true,
+          slug: true,
           bodyweight: true,
+          cardioBias: true,
+          mets: true,
           muscles: { select: { muscle: true, weight: true } },
         },
       },

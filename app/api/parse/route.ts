@@ -22,15 +22,23 @@ export interface ProposedEntry {
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
+  distanceM: number | null;
+  avgHeartRate: number | null;
   timeHint: string | null;
   notes: string | null;
   /** Only present when the movement is new and needs adding to the catalogue. */
   suggestedMuscles: { muscle: string; weight: number }[] | null;
+  /** How aerobic the model thinks a new movement is, 0..1. */
+  suggestedCardioBias: number | null;
+  suggestedMets: number | null;
+  /** True once the entry is known to be at least partly cardio. */
+  isCardio: boolean;
 }
 
 /**
  * POST /api/parse — text in, proposed entries out. Deliberately read-only:
- * the client shows these for confirmation and then posts to /api/entries.
+ * the client shows these for confirmation and then posts to /api/entries, and
+ * a proposed step count to /api/metrics.
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
@@ -64,16 +72,25 @@ export async function POST(request: NextRequest) {
     const targetDate = date ?? todayLocalDate();
 
     const proposals: ProposedEntry[] = [];
-    for (const entry of parsed) {
+    for (const entry of parsed.entries) {
       const slug = slugify(entry.exerciseName);
       const matched = bySlug.get(slug) ?? fuzzyMatch(entry.exerciseName, exercises);
 
       // Only ask the model for a muscle mapping when the movement is genuinely
       // new — one extra call per unknown name, never for catalogue hits.
       let suggestedMuscles: { muscle: string; weight: number }[] | null = null;
+      let suggestedCardioBias: number | null = null;
+      let suggestedMets: number | null = null;
       if (!matched) {
         try {
-          suggestedMuscles = await suggestMuscles({ apiKey, model, exerciseName: entry.exerciseName });
+          const suggestion = await suggestMuscles({
+            apiKey,
+            model,
+            exerciseName: entry.exerciseName,
+          });
+          suggestedMuscles = suggestion.muscles;
+          suggestedCardioBias = suggestion.cardioBias;
+          suggestedMets = suggestion.mets;
         } catch {
           // A failed suggestion is not fatal: the user can map it by hand.
           suggestedMuscles = null;
@@ -88,13 +105,24 @@ export async function POST(request: NextRequest) {
         reps: entry.reps,
         weightKg: entry.weightKg,
         durationSec: entry.durationSec,
+        distanceM: entry.distanceM,
+        avgHeartRate: entry.avgHeartRate,
         timeHint: entry.timeHint,
         notes: entry.notes,
         suggestedMuscles,
+        suggestedCardioBias,
+        suggestedMets,
+        isCardio: (matched?.cardioBias ?? suggestedCardioBias ?? 0) > 0,
       });
     }
 
-    return { date: targetDate, proposals };
+    // Steps ride along on the same dictation but do not become an entry — they
+    // are a measurement of the day, so they take a different path into the
+    // database. They are still only PROPOSED here: this endpoint is read-only,
+    // the sheet promises "nothing is stored until you confirm", and a misheard
+    // "eleven thousand" silently overwriting a phone automation's number would
+    // be exactly the failure that promise exists to prevent.
+    return { date: targetDate, proposals, steps: parsed.steps };
   });
 }
 

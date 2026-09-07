@@ -14,6 +14,7 @@ import { formatSets, type Units } from "@/lib/format";
 import type { MuscleSlug } from "@/lib/muscles";
 import type { MuscleTotals } from "@/lib/scoring";
 import { DayHeader } from "./DayHeader";
+import { StepsField } from "./StepsField";
 import { EntryList, type DayEntry } from "./EntryList";
 import { useSwipeDays } from "./useSwipeDays";
 
@@ -24,6 +25,9 @@ export interface DayViewData {
   sets: number;
   reps: number;
   tonnageKg: number;
+  steps: number | null;
+  cardioMuscles: MuscleTotals;
+  metMinutes: number;
 }
 
 export function DayView({
@@ -103,6 +107,8 @@ export function DayView({
                   reps: entry.reps,
                   weightKg: entry.weightKg,
                   durationSec: entry.durationSec,
+                  distanceM: entry.distanceM,
+                  avgHeartRate: entry.avgHeartRate,
                   notes: entry.notes,
                   source: entry.source === "llm" ? "llm" : "manual",
                 }),
@@ -146,6 +152,8 @@ export function DayView({
           reps: draft.reps,
           weightKg: draft.weightKg,
           durationSec: draft.durationSec,
+          distanceM: draft.distanceM,
+          avgHeartRate: draft.avgHeartRate,
           notes: draft.notes,
         }),
       });
@@ -175,15 +183,31 @@ export function DayView({
           transition: dragX === 0 ? "transform 200ms ease" : "none",
         }}
       >
-        <BodyMap load={day.muscles} selected={selected} onSelect={setSelected} />
+        <BodyMap
+          load={day.muscles}
+          cardioLoad={day.cardioMuscles}
+          selected={selected}
+          onSelect={setSelected}
+        />
 
         {day.entries.length > 0 && (
           <p className="mb-3 text-center text-xs text-dim">
             {day.entries.length} {day.entries.length === 1 ? "entry" : "entries"} ·{" "}
             {formatSets(day.sets)} sets
             {day.tonnageKg > 0 && ` · ${Math.round(day.tonnageKg).toLocaleString()} kg moved`}
+            {day.metMinutes > 0 && ` · ${day.metMinutes} MET-min`}
           </p>
         )}
+
+        <StepsField
+          date={day.date}
+          steps={day.steps}
+          onSaved={async (steps) => {
+            setDay((current) => ({ ...current, steps }));
+            router.refresh();
+          }}
+          onError={(message) => setToast({ message, tone: "error" })}
+        />
 
         <EntryList
           entries={day.entries}
@@ -238,6 +262,8 @@ export function DayView({
               reps: editing.reps,
               weightKg: editing.weightKg,
               durationSec: editing.durationSec,
+              distanceM: editing.distanceM,
+              avgHeartRate: editing.avgHeartRate,
               notes: editing.notes,
             }}
             submitLabel="Save changes"

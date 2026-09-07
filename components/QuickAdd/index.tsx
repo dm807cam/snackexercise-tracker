@@ -85,8 +85,8 @@ export function QuickAdd({
           date={date}
           units={units}
           hasKey={hasKey}
-          onSaved={(count) => {
-            onSaved(`Logged ${count} ${count === 1 ? "entry" : "entries"}`);
+          onSaved={(message) => {
+            onSaved(message);
             onClose();
           }}
           onError={onError}

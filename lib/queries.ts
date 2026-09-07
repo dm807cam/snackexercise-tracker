@@ -4,10 +4,37 @@
  */
 
 import { prisma } from "./db";
-import { type LocalDate, addDays, daysBetween, todayLocalDate } from "./dates";
+import {
+  type LocalDate,
+  addDays,
+  daysBetween,
+  enumerateDates,
+  previousWindowRange,
+  todayLocalDate,
+  windowRange,
+} from "./dates";
 import type { AxisSlug } from "./muscles";
 import { axisForMuscle } from "./muscles";
-import { type ScoredEntry, summariseDay, type DaySummary } from "./scoring";
+import {
+  type ScoredEntry,
+  summariseDay,
+  type DaySummary,
+  type MuscleTotals,
+  buildStats,
+  entryEffectiveSets,
+  muscleCardioLoad,
+} from "./scoring";
+import {
+  CARDIO_TARGET_MET_MIN_PER_WEEK,
+  DEFAULT_STEP_BASELINE,
+  entryMetMinutes,
+  impliedStepsFromEntries,
+  personalStepBaseline,
+  stepMetMinutes,
+  type StepSettings,
+  type StepsMode,
+} from "./cardio";
+import { buildBalance, STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK } from "./balance";
 
 /** The exercise fields every scoring path needs. */
 const entryInclude = {
@@ -15,7 +42,12 @@ const entryInclude = {
     select: {
       id: true,
       name: true,
+      // The slug identifies which pace equation applies to a cardio movement,
+      // so it travels with every scored entry rather than being looked up again.
+      slug: true,
       bodyweight: true,
+      cardioBias: true,
+      mets: true,
       muscles: { select: { muscle: true, weight: true } },
     },
   },
@@ -24,7 +56,14 @@ const entryInclude = {
 export type EntryWithExercise = ScoredEntry & {
   notes: string | null;
   source: string;
-  exercise: ScoredEntry["exercise"] & { bodyweight: boolean };
+  distanceM: number | null;
+  avgHeartRate: number | null;
+  exercise: ScoredEntry["exercise"] & {
+    slug: string;
+    bodyweight: boolean;
+    cardioBias: number;
+    mets: number | null;
+  };
 };
 
 export async function getEntriesForDate(date: LocalDate): Promise<EntryWithExercise[]> {
@@ -50,27 +89,128 @@ export async function getEntriesInRange(
 
 export async function getDaySummary(date: LocalDate): Promise<DaySummary & {
   entries: EntryWithExercise[];
+  steps: number | null;
+  cardioMuscles: MuscleTotals;
+  metMinutes: number;
 }> {
-  const entries = await getEntriesForDate(date);
-  return { ...summariseDay(date, entries), entries };
+  const [entries, steps] = await Promise.all([getEntriesForDate(date), getSteps(date)]);
+  return {
+    ...summariseDay(date, entries),
+    entries,
+    steps,
+    cardioMuscles: muscleCardioLoad(entries, entryMetMinutes),
+    metMinutes: Math.round(entries.reduce((sum, e) => sum + entryMetMinutes(e), 0)),
+  };
 }
 
 /**
- * Total effective sets per day across a range — powers the calendar's intensity
- * dots. Returns only days that actually have entries.
+ * Per-day training load across a range — powers the calendar's intensity wash.
+ *
+ * Effective sets alone would render a 10 km run as an empty square, so this is
+ * the COMBINED dose: strength and cardio each expressed as a fraction of their
+ * own weekly guideline, added, and scaled back into effective-set units so the
+ * calendar's existing reference and legend keep their meaning. Sharing the
+ * currency with the balance marker is the point — the calendar and the marker
+ * can then never disagree about what a day contained.
+ *
+ * Returns only days that carry something.
  */
 export async function getDailyLoad(
   start: LocalDate,
   end: LocalDate,
 ): Promise<Record<LocalDate, number>> {
-  const entries = await getEntriesInRange(start, end);
+  const [entries, stepsByDate, stepSettings] = await Promise.all([
+    getEntriesInRange(start, end),
+    getStepsInRange(start, end),
+    getStepSettings(),
+  ]);
+
   const byDay: Record<string, number> = {};
+  const entriesByDate = new Map<string, EntryWithExercise[]>();
+
   for (const entry of entries) {
-    const sets = entry.sets > 0 ? entry.sets : 1;
-    const contribution = entry.exercise.muscles.reduce((sum, m) => sum + sets * m.weight, 0);
-    byDay[entry.localDate] = (byDay[entry.localDate] ?? 0) + contribution;
+    const list = entriesByDate.get(entry.localDate);
+    if (list) list.push(entry);
+    else entriesByDate.set(entry.localDate, [entry]);
   }
+
+  const dates = new Set([...entriesByDate.keys(), ...Object.keys(stepsByDate)]);
+  for (const date of dates) {
+    const dayEntries = entriesByDate.get(date) ?? [];
+
+    let effectiveSets = 0;
+    let metMinutes = 0;
+    for (const entry of dayEntries) {
+      effectiveSets += entryEffectiveSets(entry);
+      metMinutes += entryMetMinutes(entry);
+    }
+
+    const steps = stepsByDate[date];
+    if (steps != null) {
+      metMinutes += stepMetMinutes(steps, stepSettings, impliedStepsFromEntries(dayEntries));
+    }
+
+    // A day at the weekly guideline pace for both qualities scores the same as
+    // a day of (target / 7) effective sets did before cardio existed.
+    const dose =
+      effectiveSets / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK +
+      metMinutes / CARDIO_TARGET_MET_MIN_PER_WEEK;
+
+    const scaled = dose * STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK;
+    if (scaled > 0) byDay[date] = scaled;
+  }
+
   return byDay;
+}
+
+// --- daily metrics ---------------------------------------------------------
+
+export async function getSteps(date: LocalDate): Promise<number | null> {
+  const row = await prisma.dailyMetric.findUnique({ where: { localDate: date } });
+  return row?.steps ?? null;
+}
+
+export async function getStepsInRange(
+  start: LocalDate,
+  end: LocalDate,
+): Promise<Record<LocalDate, number>> {
+  const rows = await prisma.dailyMetric.findMany({
+    where: { localDate: { gte: start, lte: end }, steps: { not: null } },
+    select: { localDate: true, steps: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.localDate, r.steps as number]));
+}
+
+export async function setSteps(
+  date: LocalDate,
+  steps: number | null,
+  source = "manual",
+): Promise<void> {
+  await prisma.dailyMetric.upsert({
+    where: { localDate: date },
+    create: { localDate: date, steps, source },
+    update: { steps, source },
+  });
+}
+
+/**
+ * How the user wants walking counted, and from what baseline.
+ *
+ * The baseline defaults to their own quiet quarter over the last 90 days rather
+ * than to a fixed number, because a fixed number is wrong for both a desk
+ * worker and a nurse. An explicit setting always wins.
+ */
+export async function getStepSettings(today: LocalDate = todayLocalDate()): Promise<StepSettings> {
+  const settings = await getSettings();
+  const mode = (settings.stepsMode as StepsMode) ?? "half";
+
+  const explicit = Number(settings.stepBaseline);
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return { mode, baseline: explicit };
+  }
+
+  const history = await getStepsInRange(addDays(today, -89), today);
+  return { mode, baseline: personalStepBaseline(Object.values(history)) };
 }
 
 /**
@@ -81,10 +221,16 @@ export async function getDailyLoad(
 export async function getLastTrainedByAxis(): Promise<Map<AxisSlug, LocalDate>> {
   // One grouped query rather than one per axis: get the latest localDate for
   // every muscle, then roll those up.
+  // Pure cardio is excluded: a run's thin quads mapping must not reset the
+  // "days since you trained quads" clock, which is a question about resistance
+  // work. Partly-aerobic movements (burpees, swings) still count — they really
+  // do train what they claim, just less of it.
   const rows = await prisma.$queryRaw<{ muscle: string; lastDate: string }[]>`
     SELECT em.muscle AS muscle, MAX(se.localDate) AS lastDate
     FROM SetEntry se
     JOIN ExerciseMuscle em ON em.exerciseId = se.exerciseId
+    JOIN Exercise e ON e.id = se.exerciseId
+    WHERE e.cardioBias < 1
     GROUP BY em.muscle
   `;
 
@@ -107,11 +253,29 @@ export async function getExercises() {
       slug: true,
       category: true,
       bodyweight: true,
+      cardioBias: true,
+      mets: true,
       isCustom: true,
       muscles: { select: { muscle: true, weight: true } },
     },
     orderBy: { name: "asc" },
   });
+}
+
+/**
+ * The most recent day any cardio was logged. Cardio has no radar axis — the
+ * radar is muscle coverage — but "you have not done cardio in nine days" is
+ * exactly the question this app exists to answer, so it earns a row in the
+ * "needs attention" list.
+ */
+export async function getLastCardioDate(): Promise<LocalDate | null> {
+  const rows = await prisma.$queryRaw<{ lastDate: string | null }[]>`
+    SELECT MAX(se.localDate) AS lastDate
+    FROM SetEntry se
+    JOIN Exercise e ON e.id = se.exerciseId
+    WHERE e.cardioBias > 0
+  `;
+  return rows[0]?.lastDate ?? null;
 }
 
 export type ExerciseSummary = Awaited<ReturnType<typeof getExercises>>[number];
@@ -149,4 +313,48 @@ export async function getFirstLoggedDate(): Promise<LocalDate | null> {
   return row?.localDate ?? null;
 }
 
-export { addDays, daysBetween, todayLocalDate };
+/**
+ * Everything the stats page needs, in one place.
+ *
+ * The page and /api/stats previously assembled this identically and separately,
+ * which was survivable while there were three inputs and is not now there are
+ * six — the two would drift and the tab you landed on would decide what the
+ * numbers meant.
+ */
+export async function loadStats(windowDays: number, today: LocalDate = todayLocalDate()) {
+  const current = windowRange(windowDays, today);
+  const previous = previousWindowRange(windowDays, today);
+
+  const [currentEntries, previousEntries, lastTrained, lastCardio, steps, stepSettings] =
+    await Promise.all([
+      getEntriesInRange(current.start, current.end),
+      getEntriesInRange(previous.start, previous.end),
+      getLastTrainedByAxis(),
+      getLastCardioDate(),
+      getStepsInRange(current.start, current.end),
+      getStepSettings(today),
+    ]);
+
+  const balance = buildBalance({
+    windowDays,
+    entries: currentEntries,
+    stepsByDate: steps,
+    stepSettings,
+  });
+
+  return buildStats({
+    windowDays,
+    start: current.start,
+    end: current.end,
+    current: currentEntries,
+    previous: previousEntries,
+    lastTrained,
+    today,
+    balance,
+    lastCardio,
+    daysWithSteps: Object.keys(steps).length,
+  });
+}
+
+export { addDays, daysBetween, enumerateDates, todayLocalDate };
+export { DEFAULT_STEP_BASELINE };

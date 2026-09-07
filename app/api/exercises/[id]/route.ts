@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
 import { prisma } from "@/lib/db";
-import { exerciseInputSchema } from "@/lib/validation";
+import { exercisePatchSchema } from "@/lib/validation";
 import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   return handle(async () => {
     const { id } = await params;
-    const input = exerciseInputSchema.partial().parse(await request.json());
+    const input = exercisePatchSchema.parse(await request.json());
 
     const existing = await prisma.exercise.findUnique({ where: { id } });
     if (!existing) throw new ApiError("Exercise not found", 404);
@@ -24,6 +24,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
           slug: input.name ? slugify(input.name) : undefined,
           category: input.category,
           bodyweight: input.bodyweight,
+          cardioBias: input.cardioBias,
+          mets: input.mets,
           // Muscle weightings are replaced wholesale, not merged — a partial
           // merge would silently keep mappings the user meant to remove.
           muscles: input.muscles
