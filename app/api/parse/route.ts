@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
-import { getExercises, getSetting } from "@/lib/queries";
+import { getExercises, getSetting, setSteps } from "@/lib/queries";
 import { DEFAULT_MODEL, OpenRouterError, parseWorkoutText, suggestMuscles } from "@/lib/openrouter";
 import { slugify } from "@/lib/slug";
 import { localDateSchema } from "@/lib/validation";
@@ -22,10 +22,17 @@ export interface ProposedEntry {
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
+  distanceM: number | null;
+  avgHeartRate: number | null;
   timeHint: string | null;
   notes: string | null;
   /** Only present when the movement is new and needs adding to the catalogue. */
   suggestedMuscles: { muscle: string; weight: number }[] | null;
+  /** How aerobic the model thinks a new movement is, 0..1. */
+  suggestedCardioBias: number | null;
+  suggestedMets: number | null;
+  /** True once the entry is known to be at least partly cardio. */
+  isCardio: boolean;
 }
 
 /**
@@ -64,16 +71,25 @@ export async function POST(request: NextRequest) {
     const targetDate = date ?? todayLocalDate();
 
     const proposals: ProposedEntry[] = [];
-    for (const entry of parsed) {
+    for (const entry of parsed.entries) {
       const slug = slugify(entry.exerciseName);
       const matched = bySlug.get(slug) ?? fuzzyMatch(entry.exerciseName, exercises);
 
       // Only ask the model for a muscle mapping when the movement is genuinely
       // new — one extra call per unknown name, never for catalogue hits.
       let suggestedMuscles: { muscle: string; weight: number }[] | null = null;
+      let suggestedCardioBias: number | null = null;
+      let suggestedMets: number | null = null;
       if (!matched) {
         try {
-          suggestedMuscles = await suggestMuscles({ apiKey, model, exerciseName: entry.exerciseName });
+          const suggestion = await suggestMuscles({
+            apiKey,
+            model,
+            exerciseName: entry.exerciseName,
+          });
+          suggestedMuscles = suggestion.muscles;
+          suggestedCardioBias = suggestion.cardioBias;
+          suggestedMets = suggestion.mets;
         } catch {
           // A failed suggestion is not fatal: the user can map it by hand.
           suggestedMuscles = null;
@@ -88,13 +104,26 @@ export async function POST(request: NextRequest) {
         reps: entry.reps,
         weightKg: entry.weightKg,
         durationSec: entry.durationSec,
+        distanceM: entry.distanceM,
+        avgHeartRate: entry.avgHeartRate,
         timeHint: entry.timeHint,
         notes: entry.notes,
         suggestedMuscles,
+        suggestedCardioBias,
+        suggestedMets,
+        isCardio: (matched?.cardioBias ?? suggestedCardioBias ?? 0) > 0,
       });
     }
 
-    return { date: targetDate, proposals };
+    // Steps ride along on the same dictation but do not become an entry — they
+    // are a measurement of the day. Written straight through: unlike an entry,
+    // a step count carries no risk of a misheard "225" distorting a history,
+    // and it overwrites rather than accumulates.
+    if (parsed.steps != null) {
+      await setSteps(targetDate, parsed.steps, "llm");
+    }
+
+    return { date: targetDate, proposals, steps: parsed.steps };
   });
 }
 

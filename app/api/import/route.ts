@@ -8,14 +8,24 @@ import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Accepts both export formats.
+ *
+ * Version 1 predates cardio, so its files carry no cardioBias, no distance and
+ * no daily metrics. Rather than a second schema, the new fields default: a v1
+ * exercise restores at bias 0, which is exactly what it was — resistance work.
+ * An old backup must never stop restoring because the app grew.
+ */
 const importSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   exercises: z.array(
     z.object({
       slug: z.string().min(1),
       name: z.string().min(1),
       category: z.string().default("other"),
       bodyweight: z.boolean().default(false),
+      cardioBias: z.number().min(0).max(1).default(0),
+      mets: z.number().min(1).max(23).nullish(),
       isCustom: z.boolean().default(false),
       archived: z.boolean().default(false),
       muscles: z.array(
@@ -35,10 +45,21 @@ const importSchema = z.object({
       reps: z.number().int().nullable(),
       weightKg: z.number().nullable(),
       durationSec: z.number().int().nullable(),
+      distanceM: z.number().nullish(),
+      avgHeartRate: z.number().int().nullish(),
       notes: z.string().nullable(),
       source: z.string(),
     }),
   ),
+  dailyMetrics: z
+    .array(
+      z.object({
+        localDate: localDateSchema,
+        steps: z.number().int().min(0).max(200000).nullish(),
+        source: z.string().default("import"),
+      }),
+    )
+    .optional(),
   settings: z.record(z.string(), z.string()).optional(),
 });
 
@@ -53,7 +74,10 @@ export async function POST(request: NextRequest) {
     const replace = new URL(request.url).searchParams.get("mode") === "replace";
     const data = importSchema.parse(body);
 
-    if (replace) await prisma.setEntry.deleteMany({});
+    if (replace) {
+      await prisma.setEntry.deleteMany({});
+      await prisma.dailyMetric.deleteMany({});
+    }
 
     // Ensure every referenced exercise exists, keyed by slug.
     const idBySlug = new Map<string, string>();
@@ -70,6 +94,8 @@ export async function POST(request: NextRequest) {
           name: exercise.name,
           category: exercise.category,
           bodyweight: exercise.bodyweight,
+          cardioBias: exercise.cardioBias,
+          mets: exercise.mets ?? null,
           isCustom: exercise.isCustom,
           archived: exercise.archived,
           muscles: { create: exercise.muscles },
@@ -111,6 +137,8 @@ export async function POST(request: NextRequest) {
           reps: entry.reps,
           weightKg: entry.weightKg,
           durationSec: entry.durationSec,
+          distanceM: entry.distanceM ?? null,
+          avgHeartRate: entry.avgHeartRate ?? null,
           notes: entry.notes,
           source: entry.source,
         },
@@ -118,11 +146,23 @@ export async function POST(request: NextRequest) {
       imported += 1;
     }
 
+    // Days are a measurement, not a log, so there is nothing to de-duplicate:
+    // the later file simply carries the more recent reading for that date.
+    let metrics = 0;
+    for (const day of data.dailyMetrics ?? []) {
+      await prisma.dailyMetric.upsert({
+        where: { localDate: day.localDate },
+        create: { localDate: day.localDate, steps: day.steps ?? null, source: day.source },
+        update: { steps: day.steps ?? null, source: day.source },
+      });
+      metrics += 1;
+    }
+
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       if (key === "openrouterKey") continue;
       await prisma.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
     }
 
-    return { imported, skipped, replaced: replace };
+    return { imported, skipped, metrics, replaced: replace };
   });
 }

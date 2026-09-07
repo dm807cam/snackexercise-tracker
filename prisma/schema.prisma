@@ -24,6 +24,16 @@ model Exercise {
   isCustom  Boolean @default(false)
   archived  Boolean @default(false)
 
+  /// How much of this movement is aerobic, 0..1. 0 is pure resistance work,
+  /// 1 is pure cardio, and the middle is where the honest answers live —
+  /// kettlebell swings, burpees, sled pushes. A set splits by this fraction:
+  /// (1 - cardioBias) of its effective sets count as strength, cardioBias of
+  /// its MET-minutes count as cardio. Nothing is counted twice.
+  cardioBias Float @default(0)
+  /// Default metabolic cost in METs, from the Compendium of Physical
+  /// Activities. Only consulted when neither heart rate nor pace is known.
+  mets       Float?
+
   muscles ExerciseMuscle[]
   entries SetEntry[]
 
@@ -59,6 +69,12 @@ model SetEntry {
   reps        Int?
   weightKg    Float?
   durationSec Int?
+  /// Metres covered, for movements that go somewhere. With durationSec this
+  /// yields a pace, and a pace yields METs without the user rating anything.
+  distanceM   Float?
+  /// Mean heart rate in bpm, if a watch recorded one. Best available evidence
+  /// of intensity; everything else is inference.
+  avgHeartRate Int?
   notes       String?
 
   /// "manual" | "llm" — lets you see which entries came from dictation.
@@ -69,6 +85,23 @@ model SetEntry {
   @@index([localDate])
   @@index([performedAt])
   @@index([exerciseId])
+}
+
+/// One row per local day: things that are true *of the day* rather than
+/// things you did at a moment. Steps arrive from a phone after the fact, with
+/// no time, no exercise and no muscle mapping, so they are not SetEntry rows —
+/// forced in there they would inflate entry counts, set counts, active days
+/// and the calendar shading, and every existing query would quietly start
+/// lying. Keyed on the same "YYYY-MM-DD" every other query already uses, so
+/// joining a day, a window or a calendar grid costs one index lookup.
+model DailyMetric {
+  localDate String @id
+  steps     Int?
+
+  /// "manual" | "shortcut" | "import" — worth knowing whether a number was
+  /// typed or came from a phone automation.
+  source    String   @default("manual")
+  updatedAt DateTime @updatedAt
 }
 
 model Setting {

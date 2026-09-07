@@ -85,3 +85,61 @@ test.describe("navigation", () => {
     await expect(page.getByText("Compare with the previous 90 days")).toBeVisible();
   });
 });
+
+/**
+ * The cardio path end to end: that a run reaches the database, is described by
+ * where it went rather than by how many sets of it there were, and — the point
+ * of the whole design — does not turn up as leg volume on the body map.
+ */
+test.describe("cardio and steps", () => {
+  test("a run is logged by distance and stays out of the muscle totals", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Log a snack" }).click();
+    await page.getByRole("tab", { name: "Manual" }).click();
+
+    await page.getByLabel("Exercise", { exact: true }).fill("Run");
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+
+    // Distance and heart rate appear only for a movement that has a pace.
+    await page.getByLabel("Distance (km)", { exact: true }).fill("5");
+    await page.getByLabel("Duration (min)", { exact: true }).fill("27.5");
+    await page.getByRole("button", { name: "Log it" }).click();
+
+    const entry = page.getByRole("listitem").filter({ hasText: "Run" });
+    await expect(entry).toBeVisible();
+    await expect(entry).toContainText("5 km");
+    await expect(entry).toContainText("5:30/km");
+
+    // The run trains quads in real life, and contributes no hypertrophy volume
+    // here — which is exactly what keeps the radar and "needs attention" honest.
+    await expect(page.getByRole("button", { name: /^Quads/ }).first()).toHaveAttribute(
+      "aria-label",
+      /0 effective sets/,
+    );
+    // But it is not invisible: the same region carries a cardio reading.
+    await expect(page.getByRole("button", { name: /^Quads/ }).first()).toHaveAttribute(
+      "aria-label",
+      /cardio MET-minutes/,
+    );
+  });
+
+  test("steps are recorded against the day", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /Add today.s steps/ }).click();
+    await page.getByLabel("Steps", { exact: true }).fill("11000");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(page.getByRole("button", { name: /11,000 steps/ })).toBeVisible();
+  });
+
+  test("the balance marker appears on stats", async ({ page }) => {
+    await page.goto("/stats");
+
+    await expect(page.getByRole("heading", { name: "Coverage" })).toBeVisible();
+    // The marker is a labelled image so the position is never carried by
+    // colour alone.
+    await expect(page.getByRole("img", { name: /Training balance/ })).toBeVisible();
+  });
+});

@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { api } from "@/lib/client";
-import { formatWeight, fromKg, toKg, type Units } from "@/lib/format";
+import {
+  distanceUnitsFor,
+  formatDistance,
+  formatWeight,
+  fromKg,
+  fromMetres,
+  toKg,
+  toMetres,
+  type Units,
+} from "@/lib/format";
 import { muscleLabel } from "@/lib/muscles";
 import { resolvePerformedAt } from "@/lib/parse-helpers";
 import type { LocalDate } from "@/lib/dates";
@@ -15,14 +24,20 @@ interface Proposal {
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
+  distanceM: number | null;
+  avgHeartRate: number | null;
   timeHint: string | null;
   notes: string | null;
   suggestedMuscles: { muscle: string; weight: number }[] | null;
+  suggestedCardioBias: number | null;
+  suggestedMets: number | null;
+  isCardio: boolean;
 }
 
 const EXAMPLES = [
   "3 sets of 12 kettlebell swings at 24 kilos",
   "10 pull-ups and a 2 minute plank",
+  "ran 5k in 27 minutes",
   "20 push-ups, then 5 x 5 back squat at 80",
 ];
 
@@ -41,19 +56,24 @@ export function VoiceTab({
 }) {
   const [text, setText] = useState("");
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  // Steps are already saved by the time the sheet appears — they are a
+  // measurement of the day, not a claim about it, so there is nothing to
+  // confirm. Held here only to tell the user what happened.
+  const [steps, setSteps] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function parse() {
     if (text.trim().length < 2) return;
     setBusy(true);
     try {
-      const result = await api<{ proposals: Proposal[] }>("/api/parse", {
+      const result = await api<{ proposals: Proposal[]; steps: number | null }>("/api/parse", {
         method: "POST",
         body: JSON.stringify({ text, date }),
       });
-      if (result.proposals.length === 0) {
+      if (result.proposals.length === 0 && result.steps == null) {
         onError("No exercises found in that. Try naming the movement and the reps.");
       }
+      setSteps(result.steps);
       setProposals(result.proposals);
     } catch (error) {
       onError((error as Error).message);
@@ -70,12 +90,16 @@ export function VoiceTab({
         exerciseId: p.matchedExerciseId ?? undefined,
         exerciseName: p.matchedExerciseId ? undefined : p.exerciseName,
         muscles: p.matchedExerciseId ? undefined : (p.suggestedMuscles ?? undefined),
+        cardioBias: p.matchedExerciseId ? undefined : (p.suggestedCardioBias ?? undefined),
+        mets: p.matchedExerciseId ? undefined : (p.suggestedMets ?? undefined),
         performedAt: resolvePerformedAt(date, p.timeHint).toISOString(),
         localDate: date,
         sets: p.sets,
         reps: p.reps,
         weightKg: p.weightKg,
         durationSec: p.durationSec,
+        distanceM: p.distanceM,
+        avgHeartRate: p.avgHeartRate,
         notes: p.notes,
         source: "llm" as const,
       }));
@@ -84,6 +108,7 @@ export function VoiceTab({
       onSaved(payload.length);
       setText("");
       setProposals(null);
+      setSteps(null);
     } catch (error) {
       onError((error as Error).message);
     } finally {
@@ -115,6 +140,15 @@ export function VoiceTab({
         <p className="text-sm text-dim">
           Check these before saving. Nothing is stored until you confirm.
         </p>
+
+        {steps != null && (
+          <p className="text-xs text-dim">
+            <span aria-hidden className="mr-1">
+              👟
+            </span>
+            {steps.toLocaleString()} steps recorded for this day.
+          </p>
+        )}
 
         {proposals.map((proposal, index) => (
           <ProposalCard
@@ -229,29 +263,59 @@ function ProposalCard({
         </button>
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        <MiniField
-          label="Sets"
-          value={String(proposal.sets)}
-          onChange={(v) => onChange({ sets: Math.max(1, Number(v) || 1) })}
-        />
-        <MiniField
-          label="Reps"
-          value={proposal.reps == null ? "" : String(proposal.reps)}
-          onChange={(v) => onChange({ reps: v === "" ? null : Number(v) })}
-        />
-        <MiniField
-          label={units}
-          value={proposal.weightKg == null ? "" : String(round1(fromKg(proposal.weightKg, units)))}
-          onChange={(v) => onChange({ weightKg: v === "" ? null : toKg(Number(v), units) })}
-        />
-      </div>
+      {/* A run is corrected by its distance and time, not by its load. */}
+      {proposal.isCardio ? (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <MiniField
+            label={distanceUnitsFor(units)}
+            value={
+              proposal.distanceM == null ? "" : String(round1(fromMetres(proposal.distanceM, units)))
+            }
+            onChange={(v) =>
+              onChange({ distanceM: v === "" ? null : Math.round(toMetres(Number(v), units)) })
+            }
+          />
+          <MiniField
+            label="minutes"
+            value={proposal.durationSec == null ? "" : String(round1(proposal.durationSec / 60))}
+            onChange={(v) =>
+              onChange({ durationSec: v === "" ? null : Math.round(Number(v) * 60) })
+            }
+          />
+        </div>
+      ) : (
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <MiniField
+            label="Sets"
+            value={String(proposal.sets)}
+            onChange={(v) => onChange({ sets: Math.max(1, Number(v) || 1) })}
+          />
+          <MiniField
+            label="Reps"
+            value={proposal.reps == null ? "" : String(proposal.reps)}
+            onChange={(v) => onChange({ reps: v === "" ? null : Number(v) })}
+          />
+          <MiniField
+            label={units}
+            value={proposal.weightKg == null ? "" : String(round1(fromKg(proposal.weightKg, units)))}
+            onChange={(v) => onChange({ weightKg: v === "" ? null : toKg(Number(v), units) })}
+          />
+        </div>
+      )}
 
-      {proposal.durationSec != null && (
+      {proposal.distanceM != null && proposal.distanceM > 0 ? (
         <p className="mt-2 text-xs text-dim">
-          Hold: {Math.round(proposal.durationSec / 60)} min
-          {proposal.weightKg != null && ` · ${formatWeight(proposal.weightKg, units)}`}
+          {formatDistance(proposal.distanceM, units)}
+          {proposal.durationSec != null && ` · ${Math.round(proposal.durationSec / 60)} min`}
+          {proposal.avgHeartRate != null && ` · ${proposal.avgHeartRate} bpm`}
         </p>
+      ) : (
+        proposal.durationSec != null && (
+          <p className="mt-2 text-xs text-dim">
+            Hold: {Math.round(proposal.durationSec / 60)} min
+            {proposal.weightKg != null && ` · ${formatWeight(proposal.weightKg, units)}`}
+          </p>
+        )
       )}
     </div>
   );

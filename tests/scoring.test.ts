@@ -14,6 +14,22 @@ import {
   type ScoredEntry,
 } from "@/lib/scoring";
 import type { AxisSlug } from "@/lib/muscles";
+import { buildBalance } from "@/lib/balance";
+
+/**
+ * The inputs buildStats gained when cardio arrived. These tests are about the
+ * axis maths, so they pass an empty balance rather than restating it.
+ */
+const NO_CARDIO = {
+  balance: buildBalance({
+    windowDays: 30,
+    entries: [],
+    stepsByDate: {},
+    stepSettings: { mode: "off" as const, baseline: 4000 },
+  }),
+  lastCardio: null,
+  daysWithSteps: 0,
+};
 
 function entry(overrides: Partial<ScoredEntry> & { muscles: [string, number][] }): ScoredEntry {
   const { muscles, ...rest } = overrides;
@@ -28,6 +44,7 @@ function entry(overrides: Partial<ScoredEntry> & { muscles: [string, number][] }
     exercise: {
       id: "x1",
       name: "Test",
+      cardioBias: rest.exercise?.cardioBias,
       muscles: muscles.map(([muscle, weight]) => ({ muscle, weight })),
     },
   };
@@ -70,6 +87,62 @@ describe("muscleEffectiveSets", () => {
 
   it("returns all-zero totals for an empty log", () => {
     expect(muscleEffectiveSets([])).toEqual(emptyMuscleTotals());
+  });
+});
+
+describe("cardio does not become hypertrophy volume", () => {
+  it("gives a pure cardio movement no effective sets at all", () => {
+    // A run's muscle mapping exists so it can shade something later, not so it
+    // can claim leg volume. At bias 1.0 it must contribute nothing here.
+    const totals = muscleEffectiveSets([
+      entry({
+        sets: 1,
+        muscles: [["quads", 0.25], ["calves", 0.25]],
+        exercise: { id: "x1", name: "Run", cardioBias: 1, muscles: [] },
+      }),
+    ]);
+    expect(totals.quads).toBe(0);
+    expect(totals.calves).toBe(0);
+  });
+
+  it("credits a mixed movement in proportion", () => {
+    // Burpees at 0.5: half a set's worth of chest, which is about right.
+    const totals = muscleEffectiveSets([
+      entry({
+        sets: 4,
+        muscles: [["chest", 0.5]],
+        exercise: { id: "x1", name: "Burpee", cardioBias: 0.5, muscles: [] },
+      }),
+    ]);
+    expect(totals.chest).toBe(1);
+  });
+
+  it("leaves pre-cardio entries untouched when the field is absent", () => {
+    const totals = muscleEffectiveSets([entry({ sets: 3, muscles: [["chest", 1]] })]);
+    expect(totals.chest).toBe(3);
+  });
+
+  it("keeps a run out of the radar entirely", () => {
+    const axes = rollUpToAxes(
+      muscleEffectiveSets([
+        entry({
+          sets: 1,
+          muscles: [["quads", 0.25]],
+          exercise: { id: "x1", name: "Run", cardioBias: 1, muscles: [] },
+        }),
+      ]),
+    );
+    expect(axes.quads).toBe(0);
+  });
+
+  it("still counts the run as a set and an active day", () => {
+    // The day list and the streak are about showing up, not about stimulus.
+    const run = entry({
+      sets: 1,
+      muscles: [["quads", 0.25]],
+      exercise: { id: "x1", name: "Run", cardioBias: 1, muscles: [] },
+    });
+    expect(totalSets([run])).toBe(1);
   });
 });
 
@@ -193,6 +266,7 @@ describe("buildStats", () => {
       previous: [entry({ id: "p", sets: 2, localDate: "2026-08-25", muscles: [["chest", 1]] })],
       lastTrained: new Map<AxisSlug, string>([["chest", "2026-09-05"]]),
       today,
+      ...NO_CARDIO,
     });
 
     const chest = stats.axes.find((a) => a.axis === "chest")!;
@@ -211,6 +285,7 @@ describe("buildStats", () => {
       previous: [],
       lastTrained: new Map(),
       today,
+      ...NO_CARDIO,
     });
     expect(stats.axes.every((a) => a.daysSinceTrained === null)).toBe(true);
     expect(stats.axes.every((a) => a.perWeek === 0)).toBe(true);
@@ -229,6 +304,7 @@ describe("buildStats", () => {
       previous: [],
       lastTrained: new Map(),
       today,
+      ...NO_CARDIO,
     });
     expect(stats.totals.activeDays).toBe(2);
   });
@@ -242,6 +318,7 @@ describe("buildStats", () => {
       previous: [],
       lastTrained: new Map(),
       today,
+      ...NO_CARDIO,
     });
     expect(stats.axes).toHaveLength(12);
   });

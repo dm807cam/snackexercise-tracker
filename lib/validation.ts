@@ -24,10 +24,16 @@ export const entryInputSchema = z.object({
   reps: z.number().int().min(1).max(10000).nullish(),
   weightKg: z.number().min(0).max(1000).nullish(),
   durationSec: z.number().int().min(1).max(86400).nullish(),
+  /** Metres. A marathon is 42,195; the cap allows an ultra without allowing a typo. */
+  distanceM: z.number().min(0).max(300000).nullish(),
+  avgHeartRate: z.number().int().min(20).max(250).nullish(),
   notes: z.string().max(500).nullish(),
   source: z.enum(["manual", "llm"]).default("manual"),
   /** Muscle mapping used only when creating a new custom exercise by name. */
   muscles: z.array(muscleWeightSchema).min(1).max(19).optional(),
+  /** Likewise: how aerobic a brand-new movement is, and its typical cost. */
+  cardioBias: z.number().min(0).max(1).optional(),
+  mets: z.number().min(1).max(23).nullish(),
 }).refine((v) => v.exerciseId || v.exerciseName, {
   message: "Provide either exerciseId or exerciseName",
 });
@@ -37,6 +43,8 @@ export const entryUpdateSchema = z.object({
   reps: z.number().int().min(1).max(10000).nullish(),
   weightKg: z.number().min(0).max(1000).nullish(),
   durationSec: z.number().int().min(1).max(86400).nullish(),
+  distanceM: z.number().min(0).max(300000).nullish(),
+  avgHeartRate: z.number().int().min(20).max(250).nullish(),
   notes: z.string().max(500).nullish(),
   performedAt: z.string().datetime({ offset: true }).optional(),
 });
@@ -44,10 +52,32 @@ export const entryUpdateSchema = z.object({
 export const exerciseInputSchema = z.object({
   name: z.string().min(1).max(80),
   category: z
-    .enum(["barbell", "dumbbell", "kettlebell", "bodyweight", "machine", "odd-object", "other"])
+    .enum([
+      "barbell",
+      "dumbbell",
+      "kettlebell",
+      "bodyweight",
+      "machine",
+      "odd-object",
+      "cardio",
+      "other",
+    ])
     .default("other"),
   bodyweight: z.boolean().default(false),
+  /** 0 pure resistance, 1 pure cardio. See lib/cardio.ts. */
+  cardioBias: z.number().min(0).max(1).default(0),
+  mets: z.number().min(1).max(23).nullish(),
   muscles: z.array(muscleWeightSchema).min(1).max(19),
+});
+
+/**
+ * A day's measurements. Steps are capped at a number no human reaches on foot;
+ * anything above it is a unit mix-up or a broken sensor, and silently storing
+ * it would distort the balance marker for the whole window.
+ */
+export const dailyMetricSchema = z.object({
+  steps: z.number().int().min(0).max(200000).nullish(),
+  source: z.enum(["manual", "shortcut", "import"]).default("manual"),
 });
 
 export const STATS_WINDOWS = [7, 30, 60, 90, 180] as const;
@@ -63,4 +93,11 @@ export const settingsSchema = z.object({
   units: z.enum(["kg", "lb"]).optional(),
   bodyweightKg: z.string().max(10).optional(),
   timezone: z.string().max(64).optional(),
+  /** How much walking counts toward the cardio side. See lib/cardio.ts. */
+  stepsMode: z.enum(["off", "half", "full"]).optional(),
+  /**
+   * Steps below this are ordinary living rather than training. Empty string
+   * means "work it out from my own quiet days", which is the default.
+   */
+  stepBaseline: z.string().max(10).optional(),
 });

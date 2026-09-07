@@ -6,7 +6,7 @@
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "../generated/prisma/client";
-import { EXERCISE_CATALOGUE } from "./exercise-catalogue";
+import { CARDIO_BIAS_BACKFILL, EXERCISE_CATALOGUE } from "./exercise-catalogue";
 import { slugify } from "../lib/slug";
 
 const adapter = new PrismaBetterSqlite3({
@@ -28,6 +28,8 @@ async function main() {
         slug,
         category: item.category,
         bodyweight: item.bodyweight ?? false,
+        cardioBias: item.cardioBias ?? 0,
+        mets: item.mets ?? null,
         isCustom: false,
         muscles: {
           create: Object.entries(item.muscles).map(([muscle, weight]) => ({
@@ -38,6 +40,19 @@ async function main() {
       },
     });
     created += 1;
+  }
+
+  // Movements that predate the cardio feature and are genuinely part aerobic.
+  // Only applied to rows still at the untouched defaults (bias 0, no METs):
+  // once this has run, `mets` is set, so a second pass leaves the row alone and
+  // anything the user has since adjusted in Settings survives.
+  let backfilled = 0;
+  for (const item of CARDIO_BIAS_BACKFILL) {
+    const { count } = await prisma.exercise.updateMany({
+      where: { slug: slugify(item.name), cardioBias: 0, mets: null },
+      data: { cardioBias: item.cardioBias, mets: item.mets },
+    });
+    backfilled += count;
   }
 
   // The API key may be supplied by environment on first run; after that the
@@ -51,7 +66,8 @@ async function main() {
   }
 
   console.log(
-    `Seed complete: ${created} exercise(s) added, ${EXERCISE_CATALOGUE.length - created} already present.`,
+    `Seed complete: ${created} exercise(s) added, ${EXERCISE_CATALOGUE.length - created} already present` +
+      `${backfilled > 0 ? `, ${backfilled} given a cardio weighting` : ""}.`,
   );
 }
 

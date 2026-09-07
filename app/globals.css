@@ -28,6 +28,16 @@
      as "more/less" rather than as unrelated categories. */
   --muscle-empty: oklch(0.9 0.008 60);
   --muscle-outline: oklch(0.78 0.01 60);
+
+  /* Strength-cardio gradient: a diverging pair, not a ramp. Two directions,
+     neither of them the bad one, so the ends are pinned to the same lightness
+     and chroma as --accent and differ only in hue — a cool counterpart to the
+     app's warm accent, which keeps the cardio end continuous with the rest of
+     the UI. The middle desaturates through the surface rather than through
+     grey, so a balanced marker reads as "neither", not as "missing". */
+  --strength: oklch(0.62 0.15 265);
+  --cardio: oklch(0.62 0.17 50);
+  --balance-mid: oklch(0.88 0.01 90);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -43,6 +53,9 @@
     --danger: oklch(0.65 0.19 25);
     --muscle-empty: oklch(0.3 0.01 60);
     --muscle-outline: oklch(0.42 0.012 60);
+    --strength: oklch(0.74 0.14 265);
+    --cardio: oklch(0.74 0.16 58);
+    --balance-mid: oklch(0.34 0.012 60);
   }
 }
 

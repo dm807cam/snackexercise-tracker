@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
           slug,
           category: input.category,
           bodyweight: input.bodyweight,
+          cardioBias: input.cardioBias,
+          mets: input.mets ?? null,
           isCustom: true,
           muscles: { create: input.muscles },
         },

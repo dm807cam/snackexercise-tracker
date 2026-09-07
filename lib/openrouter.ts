@@ -35,6 +35,11 @@ export const parsedEntrySchema = z.object({
   reps: z.number().int().min(1).max(1000).nullable(),
   weightKg: z.number().min(0).max(1000).nullable(),
   durationSec: z.number().int().min(1).max(86400).nullable(),
+  // Nullish rather than nullable: the JSON Schema marks both required, but a
+  // model that drops one should cost the user that field, not the whole
+  // dictation. Older stored payloads predate them entirely.
+  distanceM: z.number().min(0).max(300000).nullish().default(null),
+  avgHeartRate: z.number().int().min(20).max(250).nullish().default(null),
   /** "HH:MM" if the speaker mentioned a time, else null. */
   timeHint: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
   notes: z.string().max(200).nullable(),
@@ -42,6 +47,11 @@ export const parsedEntrySchema = z.object({
 
 export const parsedPayloadSchema = z.object({
   entries: z.array(parsedEntrySchema).max(25),
+  /**
+   * A day's step count, when the speaker mentioned one. Not an entry: steps are
+   * a measurement of the day, so they take a different path into the database.
+   */
+  steps: z.number().int().min(0).max(200000).nullable().optional(),
 });
 
 export type ParsedEntry = z.infer<typeof parsedEntrySchema>;
@@ -55,24 +65,40 @@ const RESPONSE_FORMAT = {
     schema: {
       type: "object",
       additionalProperties: false,
-      required: ["entries"],
+      required: ["entries", "steps"],
       properties: {
         entries: {
           type: "array",
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["exerciseName", "sets", "reps", "weightKg", "durationSec", "timeHint", "notes"],
+            required: [
+              "exerciseName",
+              "sets",
+              "reps",
+              "weightKg",
+              "durationSec",
+              "distanceM",
+              "avgHeartRate",
+              "timeHint",
+              "notes",
+            ],
             properties: {
               exerciseName: { type: "string", description: "Movement name, singular, e.g. 'Kettlebell swing'" },
               sets: { type: "integer", description: "Number of sets; 1 if unstated" },
               reps: { type: ["integer", "null"], description: "Reps per set, null if not stated" },
               weightKg: { type: ["number", "null"], description: "Load per side as spoken, in kilograms; convert pounds to kg; null if not stated" },
-              durationSec: { type: ["integer", "null"], description: "Seconds held, for planks/carries/hangs; null otherwise" },
+              durationSec: { type: ["integer", "null"], description: "Seconds of work: a hold for planks/carries/hangs, or the elapsed time for a run, ride or row; null otherwise" },
+              distanceM: { type: ["number", "null"], description: "Distance covered in metres; convert km and miles to metres; null if not stated" },
+              avgHeartRate: { type: ["integer", "null"], description: "Average heart rate in bpm if stated, else null" },
               timeHint: { type: ["string", "null"], description: "24h HH:MM if a time of day was stated, else null" },
               notes: { type: ["string", "null"], description: "Any remaining detail worth keeping, else null" },
             },
           },
+        },
+        steps: {
+          type: ["integer", "null"],
+          description: "The day's total step count if the speaker stated one, else null. Not an exercise.",
         },
       },
     },
@@ -87,6 +113,9 @@ Rules:
 - "3 sets of 12" -> sets 3, reps 12. "12 pull-ups" -> sets 1, reps 12.
 - Convert pounds to kilograms (1 lb = 0.4536 kg). Report bodyweight movements with weightKg null unless extra load was stated.
 - Holds and carries (plank, dead hang, farmer's carry) use durationSec, not reps.
+- Cardio (run, walk, cycle, row, swim) uses durationSec for elapsed time and distanceM for distance, with sets 1 and reps null. "5k in 27 minutes" -> distanceM 5000, durationSec 1620.
+- Convert distances to metres: "5k" and "5 km" -> 5000, "3 miles" -> 4828.
+- A stated step count for the day ("I walked 11 thousand steps") is NOT an exercise: put it in the top-level steps field and do not create an entry for it.
 - Prefer a name from the known list when the speaker clearly means it; otherwise use their words.
 - If the text contains no exercise at all, return an empty entries array.`;
 
@@ -105,7 +134,9 @@ export class OpenRouterError extends Error {
   }
 }
 
-export async function parseWorkoutText(options: ParseOptions): Promise<ParsedEntry[]> {
+export async function parseWorkoutText(
+  options: ParseOptions,
+): Promise<{ entries: ParsedEntry[]; steps: number | null }> {
   const { apiKey, model = DEFAULT_MODEL, text, knownExercises, localTime } = options;
 
   const response = await fetch(ENDPOINT, {
@@ -150,7 +181,7 @@ export async function parseWorkoutText(options: ParseOptions): Promise<ParsedEnt
     throw new OpenRouterError("OpenRouter returned no content");
   }
 
-  return extractEntries(content);
+  return extractPayload(content);
 }
 
 /**
@@ -159,6 +190,11 @@ export async function parseWorkoutText(options: ParseOptions): Promise<ParsedEnt
  * live API key.
  */
 export function extractEntries(content: string): ParsedEntry[] {
+  return extractPayload(content).entries;
+}
+
+/** As above, but keeping the day-level fields alongside the entries. */
+export function extractPayload(content: string): { entries: ParsedEntry[]; steps: number | null } {
   let json: unknown;
   try {
     json = JSON.parse(content);
@@ -177,15 +213,22 @@ export function extractEntries(content: string): ParsedEntry[] {
   if (!result.success) {
     throw new OpenRouterError("The model's response did not match the expected shape");
   }
-  return result.data.entries;
+  return { entries: result.data.entries, steps: result.data.steps ?? null };
 }
 
-/** Muscle mapping suggestion for a movement that isn't in the catalogue yet. */
+/**
+ * Muscle mapping for a movement that isn't in the catalogue yet, plus how
+ * aerobic it is.
+ *
+ * cardioBias comes back from the same call rather than a second one: a new
+ * movement needs both before it can be scored at all, and an unknown "Assault
+ * bike sprint" landing at bias 0 would quietly count as resistance volume.
+ */
 export async function suggestMuscles(options: {
   apiKey: string;
   model?: string;
   exerciseName: string;
-}): Promise<{ muscle: string; weight: number }[]> {
+}): Promise<{ muscles: { muscle: string; weight: number }[]; cardioBias: number; mets: number | null }> {
   const response = await fetch(ENDPOINT, {
     method: "POST",
     headers: {
@@ -205,7 +248,7 @@ export async function suggestMuscles(options: {
           schema: {
             type: "object",
             additionalProperties: false,
-            required: ["muscles"],
+            required: ["muscles", "cardioBias", "mets"],
             properties: {
               muscles: {
                 type: "array",
@@ -219,6 +262,16 @@ export async function suggestMuscles(options: {
                   },
                 },
               },
+              cardioBias: {
+                type: "number",
+                description:
+                  "0 for pure resistance work, 1 for pure cardio, 0.3-0.6 for movements that are genuinely both (burpees, kettlebell swings, sled pushes)",
+              },
+              mets: {
+                type: ["number", "null"],
+                description:
+                  "Typical metabolic cost in METs from the Compendium of Physical Activities; null for pure resistance work",
+              },
             },
           },
         },
@@ -227,7 +280,7 @@ export async function suggestMuscles(options: {
         {
           role: "system",
           content:
-            "Map a resistance exercise to the muscles it trains. weight 1 = primary mover, 0.5 = secondary, 0.25 = stabiliser. Return between one and six muscles.",
+            "Map an exercise to the muscles it trains and how aerobic it is. weight 1 = primary mover, 0.5 = secondary, 0.25 = stabiliser. Return between one and six muscles. For pure cardio give a thin mapping of stabiliser-weight muscles only — it will be scaled out of the hypertrophy totals anyway.",
         },
         { role: "user", content: options.exerciseName },
       ],
@@ -249,6 +302,8 @@ export async function suggestMuscles(options: {
         }),
       )
       .min(1),
+    cardioBias: z.number().min(0).max(1).nullish(),
+    mets: z.number().min(1).max(23).nullish(),
   });
 
   let json: unknown;
@@ -260,7 +315,11 @@ export async function suggestMuscles(options: {
 
   const result = schema.safeParse(json);
   if (!result.success) throw new OpenRouterError("Unexpected muscle mapping shape");
-  return result.data.muscles;
+  return {
+    muscles: result.data.muscles,
+    cardioBias: result.data.cardioBias ?? 0,
+    mets: result.data.mets ?? null,
+  };
 }
 
 function truncate(value: string, max = 200): string {

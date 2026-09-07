@@ -24,6 +24,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
           slug: input.name ? slugify(input.name) : undefined,
           category: input.category,
           bodyweight: input.bodyweight,
+          cardioBias: input.cardioBias,
+          mets: input.mets,
           // Muscle weightings are replaced wholesale, not merged — a partial
           // merge would silently keep mappings the user meant to remove.
           muscles: input.muscles

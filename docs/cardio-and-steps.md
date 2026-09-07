@@ -1,7 +1,9 @@
 # Cardio, daily steps, and the strength–cardio balance
 
-A design note. Nothing here is implemented yet; this is the argument for a
-particular shape before any of it gets built.
+A design note. **This is now built** — the note is kept as the reasoning behind
+the shape, and the decisions it reaches are recorded individually as
+[ADRs](./adr/). Where the implementation diverged from the plan below, the ADRs
+are the authority.
 
 The app currently answers one question well — *am I hitting every muscle, or
 have I quietly not trained hamstrings in three weeks?* Adding cardio and steps
@@ -405,6 +407,14 @@ This is the part that determines whether the feature is a week or a month.
 ## 8. Implementation plan
 
 Ordered so each phase is independently shippable and testable.
+
+All six phases below are implemented. What actually landed:
+
+- `lib/cardio.ts` — MET ladder, ACSM equations, step credit and de-duplication
+- `lib/balance.ts` — dose, Beta-shrunk share, uncertainty
+- `lib/steps-csv.ts` — the backfill parser
+- `components/Stats/BalanceGradient.tsx` — the marker
+- 135 unit tests, plus three browser tests covering the cardio path
 
 **Phase 1 — data.** Migration for `Exercise.cardioBias`, `Exercise.mets`,
 `SetEntry.distanceM`, `SetEntry.avgHeartRate`, `DailyMetric`. Catalogue rows and

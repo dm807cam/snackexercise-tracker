@@ -35,7 +35,10 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
             select: {
               id: true,
               name: true,
+              slug: true,
               bodyweight: true,
+              cardioBias: true,
+              mets: true,
               muscles: { select: { muscle: true, weight: true } },
             },
           },

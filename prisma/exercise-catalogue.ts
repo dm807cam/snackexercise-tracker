@@ -13,8 +13,23 @@ import type { MuscleSlug } from "../lib/muscles";
 
 export interface CatalogueEntry {
   name: string;
-  category: "barbell" | "dumbbell" | "kettlebell" | "bodyweight" | "machine" | "odd-object" | "other";
+  category:
+    | "barbell"
+    | "dumbbell"
+    | "kettlebell"
+    | "bodyweight"
+    | "machine"
+    | "odd-object"
+    | "cardio"
+    | "other";
   bodyweight?: boolean;
+  /**
+   * How aerobic the movement is, 0..1. Omitted means 0 — pure resistance work,
+   * which is what everything below the cardio section is.
+   */
+  cardioBias?: number;
+  /** Default METs when neither heart rate nor pace is known. */
+  mets?: number;
   muscles: Partial<Record<MuscleSlug, number>>;
 }
 
@@ -105,4 +120,47 @@ export const EXERCISE_CATALOGUE: CatalogueEntry[] = [
   // ---- Calves ----
   { name: "Calf raise", category: "bodyweight", bodyweight: true, muscles: { calves: 1 } },
   { name: "Standing calf raise", category: "dumbbell", muscles: { calves: 1 } },
+
+  // ---- Cardio ----
+  //
+  // Muscle mappings here are deliberately thin, and none of them is a primary
+  // mover. They exist so a run still lights something on the body map, not so
+  // it can claim leg volume: effective sets are scaled by (1 - cardioBias), so
+  // at bias 1.0 these weightings contribute exactly nothing to the radar or
+  // the "needs attention" list. They start to matter at bias 0.3-0.5, which is
+  // where they should — a burpee really does train the chest a little.
+  //
+  // METs are Compendium of Physical Activities values, used only as a fallback
+  // when the entry records neither a pace nor a heart rate.
+  { name: "Run", category: "cardio", bodyweight: true, cardioBias: 1, mets: 9.8, muscles: { quads: 0.25, hamstrings: 0.25, calves: 0.25 } },
+  { name: "Treadmill run", category: "cardio", bodyweight: true, cardioBias: 1, mets: 9.8, muscles: { quads: 0.25, hamstrings: 0.25, calves: 0.25 } },
+  { name: "Walk", category: "cardio", bodyweight: true, cardioBias: 1, mets: 3.5, muscles: { calves: 0.25, quads: 0.25 } },
+  { name: "Hike", category: "cardio", bodyweight: true, cardioBias: 1, mets: 6, muscles: { calves: 0.25, quads: 0.25, glutes: 0.25 } },
+  { name: "Cycle", category: "cardio", bodyweight: true, cardioBias: 1, mets: 7.5, muscles: { quads: 0.25, calves: 0.25 } },
+  { name: "Stationary bike", category: "cardio", cardioBias: 1, mets: 6.8, muscles: { quads: 0.25, calves: 0.25 } },
+  { name: "Assault bike", category: "cardio", cardioBias: 0.9, mets: 10, muscles: { quads: 0.25, "front-delts": 0.25, lats: 0.25 } },
+  { name: "Row (erg)", category: "cardio", cardioBias: 0.8, mets: 7, muscles: { lats: 0.5, "mid-back": 0.5, quads: 0.5, biceps: 0.25 } },
+  { name: "Swim", category: "cardio", bodyweight: true, cardioBias: 1, mets: 7, muscles: { lats: 0.25, "front-delts": 0.25, triceps: 0.25 } },
+  { name: "Jump rope", category: "cardio", bodyweight: true, cardioBias: 1, mets: 11, muscles: { calves: 0.5, forearms: 0.25 } },
+  { name: "Stair climb", category: "cardio", bodyweight: true, cardioBias: 1, mets: 9, muscles: { quads: 0.25, glutes: 0.25, calves: 0.25 } },
+  { name: "Elliptical", category: "cardio", cardioBias: 1, mets: 5, muscles: { quads: 0.25, glutes: 0.25 } },
+  { name: "Burpee", category: "bodyweight", bodyweight: true, cardioBias: 0.5, mets: 8, muscles: { chest: 0.5, quads: 0.5, "front-delts": 0.5, abs: 0.5, triceps: 0.25 } },
+  { name: "Mountain climber", category: "bodyweight", bodyweight: true, cardioBias: 0.6, mets: 8, muscles: { abs: 1, "front-delts": 0.25, quads: 0.25 } },
+  { name: "Battle rope", category: "cardio", cardioBias: 0.6, mets: 8, muscles: { "front-delts": 0.5, forearms: 0.5, abs: 0.25 } },
+  { name: "Shadow boxing", category: "cardio", bodyweight: true, cardioBias: 0.8, mets: 7.8, muscles: { "front-delts": 0.5, obliques: 0.25, calves: 0.25 } },
+];
+
+/**
+ * Movements already in the catalogue that are partly aerobic. Kept separate
+ * from the list above because these rows exist in every database that has ever
+ * run this app, so they need updating rather than creating — the seed skips
+ * anything whose slug it already finds.
+ */
+export const CARDIO_BIAS_BACKFILL: { name: string; cardioBias: number; mets: number }[] = [
+  { name: "Kettlebell swing", cardioBias: 0.4, mets: 9.8 },
+  { name: "Kettlebell snatch", cardioBias: 0.4, mets: 9.8 },
+  { name: "Sled push", cardioBias: 0.3, mets: 8 },
+  { name: "Sandbag carry", cardioBias: 0.3, mets: 8 },
+  { name: "Farmer's carry", cardioBias: 0.25, mets: 6.5 },
+  { name: "Suitcase carry", cardioBias: 0.25, mets: 6.5 },
 ];
