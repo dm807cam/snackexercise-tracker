@@ -49,26 +49,46 @@ export const entryUpdateSchema = z.object({
   performedAt: z.string().datetime({ offset: true }).optional(),
 });
 
-export const exerciseInputSchema = z.object({
+/**
+ * Fields of an exercise, without defaults.
+ *
+ * Kept separate from exerciseInputSchema because `.partial()` does NOT strip
+ * `.default()` — a defaulted field is already optional on input, so partial
+ * wraps it and the default still fires. A PATCH carrying only `{muscles}`
+ * (which is exactly what the Settings muscle editor sends) would therefore
+ * arrive at Prisma carrying cardioBias 0, category "other" and bodyweight
+ * false, silently resetting all three. For cardioBias that is not a cosmetic
+ * reset: editing Run's muscle mapping would turn every run in the history into
+ * full strength volume and zero its MET-minutes.
+ */
+const exerciseFieldsSchema = z.object({
   name: z.string().min(1).max(80),
-  category: z
-    .enum([
-      "barbell",
-      "dumbbell",
-      "kettlebell",
-      "bodyweight",
-      "machine",
-      "odd-object",
-      "cardio",
-      "other",
-    ])
-    .default("other"),
-  bodyweight: z.boolean().default(false),
+  category: z.enum([
+    "barbell",
+    "dumbbell",
+    "kettlebell",
+    "bodyweight",
+    "machine",
+    "odd-object",
+    "cardio",
+    "other",
+  ]),
+  bodyweight: z.boolean(),
   /** 0 pure resistance, 1 pure cardio. See lib/cardio.ts. */
-  cardioBias: z.number().min(0).max(1).default(0),
+  cardioBias: z.number().min(0).max(1),
   mets: z.number().min(1).max(23).nullish(),
   muscles: z.array(muscleWeightSchema).min(1).max(19),
 });
+
+/** Creating an exercise: defaults apply, only name and muscles are required. */
+export const exerciseInputSchema = exerciseFieldsSchema.extend({
+  category: exerciseFieldsSchema.shape.category.default("other"),
+  bodyweight: z.boolean().default(false),
+  cardioBias: z.number().min(0).max(1).default(0),
+});
+
+/** Updating one: every field optional, and an absent field stays absent. */
+export const exercisePatchSchema = exerciseFieldsSchema.partial();
 
 /**
  * A day's measurements. Steps are capped at a number no human reaches on foot;
@@ -77,7 +97,7 @@ export const exerciseInputSchema = z.object({
  */
 export const dailyMetricSchema = z.object({
   steps: z.number().int().min(0).max(200000).nullish(),
-  source: z.enum(["manual", "shortcut", "import"]).default("manual"),
+  source: z.enum(["manual", "shortcut", "import", "llm"]).default("manual"),
 });
 
 export const STATS_WINDOWS = [7, 30, 60, 90, 180] as const;

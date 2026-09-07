@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
-import { getExercises, getSetting, setSteps } from "@/lib/queries";
+import { getExercises, getSetting } from "@/lib/queries";
 import { DEFAULT_MODEL, OpenRouterError, parseWorkoutText, suggestMuscles } from "@/lib/openrouter";
 import { slugify } from "@/lib/slug";
 import { localDateSchema } from "@/lib/validation";
@@ -37,7 +37,8 @@ export interface ProposedEntry {
 
 /**
  * POST /api/parse — text in, proposed entries out. Deliberately read-only:
- * the client shows these for confirmation and then posts to /api/entries.
+ * the client shows these for confirmation and then posts to /api/entries, and
+ * a proposed step count to /api/metrics.
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
@@ -116,13 +117,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Steps ride along on the same dictation but do not become an entry — they
-    // are a measurement of the day. Written straight through: unlike an entry,
-    // a step count carries no risk of a misheard "225" distorting a history,
-    // and it overwrites rather than accumulates.
-    if (parsed.steps != null) {
-      await setSteps(targetDate, parsed.steps, "llm");
-    }
-
+    // are a measurement of the day, so they take a different path into the
+    // database. They are still only PROPOSED here: this endpoint is read-only,
+    // the sheet promises "nothing is stored until you confirm", and a misheard
+    // "eleven thousand" silently overwriting a phone automation's number would
+    // be exactly the failure that promise exists to prevent.
     return { date: targetDate, proposals, steps: parsed.steps };
   });
 }

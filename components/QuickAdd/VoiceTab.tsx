@@ -51,14 +51,13 @@ export function VoiceTab({
   date: LocalDate;
   units: Units;
   hasKey: boolean;
-  onSaved: (count: number) => void;
+  onSaved: (message: string) => void;
   onError: (message: string) => void;
 }) {
   const [text, setText] = useState("");
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
-  // Steps are already saved by the time the sheet appears — they are a
-  // measurement of the day, not a claim about it, so there is nothing to
-  // confirm. Held here only to tell the user what happened.
+  // Proposed, not saved: /api/parse is read-only, so a dictated step count is
+  // written on confirm along with the entries.
   const [steps, setSteps] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -83,7 +82,8 @@ export function VoiceTab({
   }
 
   async function confirm() {
-    if (!proposals?.length) return;
+    // A dictation can be nothing but a step count, which is still worth saving.
+    if (!proposals || (proposals.length === 0 && steps == null)) return;
     setBusy(true);
     try {
       const payload = proposals.map((p) => ({
@@ -104,8 +104,16 @@ export function VoiceTab({
         source: "llm" as const,
       }));
 
-      await api("/api/entries", { method: "POST", body: JSON.stringify(payload) });
-      onSaved(payload.length);
+      if (payload.length > 0) {
+        await api("/api/entries", { method: "POST", body: JSON.stringify(payload) });
+      }
+      if (steps != null) {
+        await api(`/api/metrics/${date}`, {
+          method: "PUT",
+          body: JSON.stringify({ steps, source: "llm" }),
+        });
+      }
+      onSaved(describeSaved(payload.length, steps));
       setText("");
       setProposals(null);
       setSteps(null);
@@ -146,7 +154,7 @@ export function VoiceTab({
             <span aria-hidden className="mr-1">
               👟
             </span>
-            {steps.toLocaleString()} steps recorded for this day.
+            {steps.toLocaleString()} steps for this day.
           </p>
         )}
 
@@ -172,11 +180,15 @@ export function VoiceTab({
           <button
             type="button"
             onClick={confirm}
-            disabled={busy || proposals.length === 0}
+            disabled={busy || (proposals.length === 0 && steps == null)}
             className="flex-[2] rounded-xl py-3 text-base font-semibold disabled:opacity-40"
             style={{ background: "var(--accent)", color: "var(--accent-contrast)" }}
           >
-            {busy ? "Saving..." : `Save ${proposals.length} ${proposals.length === 1 ? "entry" : "entries"}`}
+            {busy
+              ? "Saving..."
+              : proposals.length === 0
+                ? "Save steps"
+                : `Save ${proposals.length} ${proposals.length === 1 ? "entry" : "entries"}`}
           </button>
         </div>
       </div>
@@ -223,6 +235,14 @@ export function VoiceTab({
       </button>
     </div>
   );
+}
+
+/** "Logged 2 entries and 11,000 steps" — a dictation can carry either or both. */
+function describeSaved(entries: number, steps: number | null): string {
+  const parts: string[] = [];
+  if (entries > 0) parts.push(`${entries} ${entries === 1 ? "entry" : "entries"}`);
+  if (steps != null) parts.push(`${steps.toLocaleString()} steps`);
+  return `Logged ${parts.join(" and ")}`;
 }
 
 function ProposalCard({

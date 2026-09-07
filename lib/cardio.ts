@@ -89,6 +89,23 @@ function interpolate(points: [number, number][], x: number): number {
 /** Movements whose pace is worth converting, and the equation that fits them. */
 type PaceFamily = "foot" | "cycle";
 
+/**
+ * Plausible speeds in metres/minute, used ONLY to turn a distance into a
+ * duration when the user logged the first and not the second. Never fed back
+ * into the MET calculation — an assumed pace must not masquerade as a measured
+ * one, so a distance-only entry still scores at its catalogue METs.
+ */
+const ASSUMED_SPEED: Record<string, number> = {
+  run: 167, // 10 km/h
+  "treadmill-run": 167,
+  walk: 83, // 5 km/h
+  hike: 67, // 4 km/h
+  cycle: 333, // 20 km/h
+  "stationary-bike": 333,
+  swim: 33, // 2 km/h
+  "row-erg": 200,
+};
+
 const PACE_FAMILY: Record<string, PaceFamily> = {
   run: "foot",
   "treadmill-run": "foot",
@@ -149,11 +166,24 @@ export function effectiveDurationSec(input: {
   sets: number;
   reps: number | null;
   durationSec: number | null;
+  distanceM?: number | null;
+  exercise?: { slug?: string };
 }): number {
-  if (input.durationSec != null && input.durationSec > 0) {
-    return input.durationSec * Math.max(1, input.sets);
-  }
   const sets = Math.max(1, input.sets);
+
+  if (input.durationSec != null && input.durationSec > 0) {
+    return input.durationSec * sets;
+  }
+
+  // "I ran 10k" with no time on it. Falling through to 45 seconds a set would
+  // score a 10 km run at 7 MET-minutes while still subtracting 13,000 steps
+  // from the day's walking credit — logging the run would make the cardio dose
+  // go DOWN. Estimate the time from the distance instead.
+  if (input.distanceM != null && input.distanceM > 0) {
+    const speed = ASSUMED_SPEED[input.exercise?.slug ?? ""];
+    if (speed) return Math.round((input.distanceM / speed) * 60) * sets;
+  }
+
   const perSet = input.reps != null && input.reps > 0 ? Math.min(input.reps * 3, 600) : 45;
   return sets * perSet;
 }
@@ -252,11 +282,16 @@ export function impliedStepsFromEntries(entries: readonly CardioInput[]): number
   for (const entry of entries) {
     if (paceFamilyFor(entry.exercise.slug) !== "foot") continue;
 
+    // Distance is per set, the same way durationSec is: 6 x 400 m repeats cover
+    // 2.4 km, and crediting one 400 m would leave five reps' worth of steps
+    // double-counted against the day.
+    const sets = Math.max(1, entry.sets);
+
     if (entry.distanceM != null && entry.distanceM > 0) {
       const durationSec = entry.durationSec ?? 0;
       const running =
         durationSec > 0 && entry.distanceM / (durationSec / 60) >= 107;
-      steps += entry.distanceM / (running ? STRIDE_RUNNING : STRIDE_WALKING);
+      steps += (entry.distanceM * sets) / (running ? STRIDE_RUNNING : STRIDE_WALKING);
       continue;
     }
 

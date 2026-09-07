@@ -143,6 +143,30 @@ describe("effectiveDurationSec", () => {
   it("caps a single absurd rep count", () => {
     expect(effectiveDurationSec({ sets: 1, reps: 100000, durationSec: null })).toBe(600);
   });
+
+  it("estimates the time of a distance logged without one", () => {
+    // "I ran 10k" and nothing else. Falling through to 45 seconds a set would
+    // score the run at 7 MET-minutes while still subtracting 13,000 steps from
+    // the day's walking credit, so logging it would LOWER the cardio dose.
+    const run = { sets: 1, reps: null, durationSec: null, distanceM: 10000, exercise: { slug: "run" } };
+    expect(effectiveDurationSec(run)).toBeCloseTo(3593, -2); // ~60 min at 10 km/h
+  });
+
+  it("uses a walking speed for a walk and a cycling speed for a ride", () => {
+    const walk = { sets: 1, reps: null, durationSec: null, distanceM: 5000, exercise: { slug: "walk" } };
+    const ride = { sets: 1, reps: null, durationSec: null, distanceM: 5000, exercise: { slug: "cycle" } };
+    expect(effectiveDurationSec(walk)).toBeGreaterThan(effectiveDurationSec(ride));
+  });
+
+  it("prefers a recorded duration over the estimate", () => {
+    const run = { sets: 1, reps: null, durationSec: 1500, distanceM: 10000, exercise: { slug: "run" } };
+    expect(effectiveDurationSec(run)).toBe(1500);
+  });
+
+  it("falls back to the per-set estimate for a movement with no assumed speed", () => {
+    const odd = { sets: 2, reps: null, durationSec: null, distanceM: 500, exercise: { slug: "sled-push" } };
+    expect(effectiveDurationSec(odd)).toBe(90);
+  });
 });
 
 describe("entryMetMinutes", () => {
@@ -160,6 +184,17 @@ describe("entryMetMinutes", () => {
       cardio({ sets: 5, reps: 5, exercise: { cardioBias: 0, mets: 6 } }),
     );
     expect(entry).toBe(0);
+  });
+
+  it("scores a distance-only run properly rather than as one 45-second set", () => {
+    const run = entryMetMinutes(
+      cardio({ distanceM: 10000, exercise: { slug: "run", mets: 9.8, cardioBias: 1 } }),
+    );
+    // ~60 minutes at the catalogue's 9.8 METs. The assumed pace supplies the
+    // duration only — it must not masquerade as a measured pace and change the
+    // intensity too.
+    expect(run).toBeGreaterThan(500);
+    expect(run).toBeLessThan(650);
   });
 
   it("credits rep-based mixed work that recorded no duration", () => {
@@ -247,6 +282,18 @@ describe("impliedStepsFromEntries", () => {
       exercise: { slug: "walk", mets: 3.5, cardioBias: 1 },
     });
     expect(impliedStepsFromEntries([walk])).toBeCloseTo(6600, -1);
+  });
+
+  it("counts distance once per set, not once per entry", () => {
+    // 6 x 400 m repeats cover 2.4 km. Crediting a single 400 m would leave five
+    // reps' worth of steps double-counted against the day's total.
+    const repeats = cardio({
+      sets: 6,
+      durationSec: 90,
+      distanceM: 400,
+      exercise: { slug: "run", mets: 9.8, cardioBias: 1 },
+    });
+    expect(impliedStepsFromEntries([repeats])).toBeCloseTo((400 * 6) / 1.15, 0);
   });
 
   it("ignores cardio that does not involve feet hitting the ground", () => {
