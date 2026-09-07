@@ -15,7 +15,8 @@ Self-hosted, single container, SQLite on a volume. No account, no cloud.
 
 ## What it does
 
-**Today** — a bar at the top proposing what to train next and why, then front
+**Today** — two closing rings showing how much strength and cardio today still
+owes, a bar proposing what to train next and why, then front
 and back body diagrams filled in blue for what you've lifted and outlined in
 orange for what you've run, a timeline of how the
 day's snacks were spread, and a chronological list of the day's entries.
@@ -122,6 +123,26 @@ The day page shows today's bouts on a timeline; the stats page shows the average
 over the window with a histogram of which hours your training actually lands in.
 Set your waking hours under Settings — scoring a night-shift worker's 22:00
 session as badly timed would just make the number something to ignore.
+
+### How much is left today
+
+The day opens with two rings: outer for strength, inner for cardio, each closing
+as the day fills them. Beside them, what is still owed in the app's own units
+and in something you can act on — "6.3 sets to go · about 3 more", "86 MET-min
+to go · about 14 min".
+
+Each target is **a seventh of that side's weekly guideline**, so ~8.6 effective
+sets and ~86 MET-minutes a day, derived from the same constants the balance
+marker and the calendar use. Steps count toward cardio on the same terms the
+balance marker uses.
+
+**Nothing carries over.** A huge Tuesday does not buy Wednesday off, and an
+empty Monday does not make Tuesday owe double — a target that moves for reasons
+off-screen is not a target, and banking a surplus invites paying the week off in
+one Saturday, which is what the spacing score exists to discourage. The weekly
+picture is on the stats page. A rest day shows two open rings and the copy never
+scolds; there is no streak to break. [ADR
+0014](./docs/adr/0014-a-daily-share-with-no-carry-over.md).
 
 ### What to do next
 
@@ -262,7 +283,7 @@ PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromium npm run test:e2e
 app/                 pages and API routes
 components/
   BodyMap/           front/back diagrams and their geometry
-  DayView/           day page: header, swipe, entry list, spacing, next-up bar
+  DayView/           day page: header, swipe, entry list, spacing, goal rings
   QuickAdd/          the "Say it" / "Manual" sheet
   Stats/             radar chart, balance gradient, spacing card
 lib/
@@ -271,6 +292,7 @@ lib/
   cardio.ts          MET-minutes, pace equations, step credit (pure)
   balance.ts         the strength/cardio index (pure)
   spacing.ts         how well a day was broken up (pure)
+  daily-goal.ts      how much of today is still to do (pure)
   suggest.ts         what to train next, and why (pure)
   dates.ts           local-day arithmetic and formatting
   openrouter.ts      LLM client and response schema
