@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sheet } from "@/components/Sheet";
 import { api } from "@/lib/client";
 import type { Units } from "@/lib/format";
@@ -34,10 +34,16 @@ export function QuickAdd({
   onSaved: (message: string) => void;
   onError: (message: string) => void;
 }) {
-  // A preselected movement is a manual-tab thing; opening on Voice would throw
-  // the suggestion away at the moment the user acted on it.
   const [tab, setTab] = useState<"voice" | "manual">(hasKey ? "voice" : "manual");
   const [busy, setBusy] = useState(false);
+
+  // A preselected movement is a manual-tab thing: the Voice tab never mounts
+  // ManualForm, so opening there would silently throw the suggestion away at
+  // the moment the user acted on it. Only forced on open, so someone who then
+  // switches to Voice is left alone.
+  useEffect(() => {
+    if (open && initialExerciseId) setTab("manual");
+  }, [open, initialExerciseId]);
 
   async function saveManual(draft: ManualDraft) {
     setBusy(true);

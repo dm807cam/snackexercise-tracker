@@ -105,7 +105,10 @@ export function ManualForm({
       avgHeartRate:
         heartRateValue == null || Number.isNaN(heartRateValue) ? null : Math.round(heartRateValue),
       notes: notes.trim() === "" ? null : notes.trim(),
-      performedTime: /^\d{2}:\d{2}$/.test(time) ? time : null,
+      // The same pattern the server validates against. A looser one here turns
+      // a browser that falls back to a text input, and a typo like 25:00, into
+      // a 400 that loses the whole entry rather than just the time.
+      performedTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : null,
     });
   }
 

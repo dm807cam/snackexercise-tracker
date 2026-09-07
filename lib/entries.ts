@@ -62,17 +62,23 @@ export async function createEntry(input: EntryInput) {
   // belongs to. If only one is given, derive the other rather than guessing.
   const { timeZone } = await getAppConfig();
 
+  // The day the time belongs to. The two are independently optional on the
+  // wire, so a time sent without a day means today — requiring both would
+  // silently stamp "now" over a time the user explicitly chose.
+  const localDate =
+    input.localDate ??
+    (input.performedTime
+      ? toLocalDateInZone(new Date(), timeZone)
+      : toLocalDateInZone(input.performedAt ? new Date(input.performedAt) : new Date(), timeZone));
+
   // A typed "HH:MM" wins over any instant sent alongside it: it is the thing
   // the user actually chose, and resolving it here means it means the same
   // clock time whatever zone the browser was in.
-  const performedAt =
-    input.performedTime && input.localDate
-      ? zonedDateTimeToInstant(input.localDate, input.performedTime, timeZone)
-      : input.performedAt
-        ? new Date(input.performedAt)
-        : new Date();
-
-  const localDate = input.localDate ?? toLocalDateInZone(performedAt, timeZone);
+  const performedAt = input.performedTime
+    ? zonedDateTimeToInstant(localDate, input.performedTime, timeZone)
+    : input.performedAt
+      ? new Date(input.performedAt)
+      : new Date();
 
   return prisma.setEntry.create({
     data: {

@@ -225,3 +225,75 @@ test.describe("when it happened", () => {
     await expect(page.getByRole("button", { name: /^Log .+ — / })).toBeVisible();
   });
 });
+
+/**
+ * The wire contract for a stated time, at the level the unit tests cannot
+ * reach. Both halves are independently optional, and each used to be quietly
+ * dropped when it arrived alone: a time without a day was stamped "now", and a
+ * day without a time validated and wrote nothing.
+ */
+test.describe("stating when, one half at a time", () => {
+  test("a time with no day means today, and a day with no time keeps the clock", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    const { exercises } = await (await page.request.get("/api/exercises")).json();
+    const plank = exercises.find((e: { name: string }) => e.name === "Plank").id;
+
+    // A time, no day.
+    const created = await page.request.post("/api/entries", {
+      data: { exerciseId: plank, performedTime: "06:45", sets: 1, durationSec: 60 },
+    });
+    expect(created.ok()).toBe(true);
+    const { entries } = await created.json();
+    const id = entries[0].id;
+    expect(entries[0].localDate).toBe(today);
+
+    await page.goto(`/day/${today}`);
+    const entry = page.getByRole("listitem").filter({ hasText: "Plank" });
+    await expect(entry.getByRole("time")).toHaveText("06:45");
+
+    // A day, no time: the entry moves and keeps 06:45.
+    const yesterday = new Date(`${today}T12:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const moved = yesterday.toISOString().slice(0, 10);
+
+    const patched = await page.request.patch(`/api/entries/${id}`, {
+      data: { localDate: moved },
+    });
+    expect(patched.ok()).toBe(true);
+    expect((await patched.json()).entry.localDate).toBe(moved);
+
+    await page.goto(`/day/${moved}`);
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Plank" }).getByRole("time"),
+    ).toHaveText("06:45");
+
+    await page.request.delete(`/api/entries/${id}`);
+  });
+
+  test("the suggestion opens the manual tab even when voice is configured", async ({ page }) => {
+    // With a key present the sheet defaults to Voice, which never mounts the
+    // manual form — so the preselected movement was thrown away at the moment
+    // the user acted on the suggestion.
+    await page.request.put("/api/settings", {
+      data: { openrouterKey: "sk-or-v1-e2e-placeholder" },
+    });
+    try {
+      await page.goto("/");
+      await page.getByRole("button", { name: /^Log .+ — / }).click();
+
+      await expect(page.getByRole("tab", { name: "Manual" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      // And the movement it named is already chosen, so logging it is one tap.
+      await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Log it" })).toBeEnabled();
+    } finally {
+      await page.request.put("/api/settings", { data: { openrouterKey: "" } });
+    }
+  });
+});

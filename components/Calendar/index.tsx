@@ -107,7 +107,6 @@ export function CalendarView({
         {weeks.flat().map((date) => {
           const inMonth = parseLocalDate(date).getMonth() === currentMonth;
           const day = load[date];
-          const total = day?.total ?? 0;
           const intensity = shadeIntensity(day?.strength ?? 0, reference);
           const cardioIntensity = shadeIntensity(day?.cardio ?? 0, reference);
           const isToday = date === today;
@@ -121,8 +120,11 @@ export function CalendarView({
               aria-label={`${date}: ${describe(day)}`}
               className="relative grid aspect-square place-items-center rounded-lg text-sm tabular-nums transition-transform active:scale-95"
               style={{
+                // Keyed on the wash, not on the total: a cardio-only day has
+                // no wash to sit on, and leaving it transparent dropped it to
+                // the page background where it read as a rest day.
                 background:
-                  total > 0 ? "transparent" : inMonth ? "var(--surface)" : "transparent",
+                  intensity > 0 ? "transparent" : inMonth ? "var(--surface)" : "transparent",
                 // Today's ring is the text colour, not the accent: the accent
                 // is the cardio orange, and a cell already uses that to mean
                 // "this day carried cardio".

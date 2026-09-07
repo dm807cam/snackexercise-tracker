@@ -3,6 +3,7 @@
  * scoring maths in lib/scoring.ts so that file stays trivially testable.
  */
 
+import { cache } from "react";
 import { prisma } from "./db";
 import {
   type LocalDate,
@@ -355,10 +356,19 @@ export async function getRecentExerciseIds(limit = 12): Promise<string[]> {
   return rows.map((r) => r.exerciseId);
 }
 
-export async function getSettings(): Promise<Record<string, string>> {
+/**
+ * Every setting, memoised for the life of one request.
+ *
+ * Five callers ask for these on a single day-page render — the timezone, the
+ * units, the step mode, the step baseline and the active window — and each was
+ * its own table scan. React's `cache` collapses them into one without any
+ * caller having to know the others exist, and it is per-request, so a change
+ * saved in Settings is visible on the very next render.
+ */
+export const getSettings = cache(async (): Promise<Record<string, string>> => {
   const rows = await prisma.setting.findMany();
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
-}
+});
 
 export async function getSetting(key: string): Promise<string | null> {
   const row = await prisma.setting.findUnique({ where: { key } });
@@ -386,6 +396,13 @@ export async function loadStats(
   windowDays: number,
   today: LocalDate = todayLocalDate(),
   timeZone?: string,
+  /**
+   * Whether to scan the equivalent preceding window for the radar's trend
+   * overlay. The day page asks for stats only to place its suggestion, which
+   * reads none of the previous-period fields, and that scan is the single
+   * biggest cost on a page that re-renders after every logged set.
+   */
+  comparePrevious = true,
 ) {
   const current = windowRange(windowDays, today);
   const previous = previousWindowRange(windowDays, today);
@@ -400,7 +417,7 @@ export async function loadStats(
     activeWindow,
   ] = await Promise.all([
     getEntriesInRange(current.start, current.end),
-    getEntriesInRange(previous.start, previous.end),
+    comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
     getLastTrainedByAxis(),
     getLastCardioDate(),
     getStepsInRange(current.start, current.end),

@@ -122,6 +122,15 @@ describe("a stated time of day", () => {
     }
   });
 
+  it("accepts a time without a day, which means today", () => {
+    // The two are independently optional on the wire. Requiring both here
+    // would be a lie about the schema; requiring both in createEntry was a bug
+    // that silently stamped "now" over the time the user chose.
+    const parsed = entryInputSchema.parse({ exerciseId: "x1", performedTime: "06:30" });
+    expect(parsed.performedTime).toBe("06:30");
+    expect(parsed.localDate).toBeUndefined();
+  });
+
   it("lets a PATCH move an entry to another time and another day", () => {
     const patch = entryUpdateSchema.parse({
       performedTime: "18:45",
@@ -132,5 +141,13 @@ describe("a stated time of day", () => {
 
   it("leaves a PATCH that says nothing about time alone", () => {
     expect(entryUpdateSchema.parse({ sets: 3 })).toEqual({ sets: 3 });
+  });
+
+  it("accepts a day on its own, which moves an entry without retiming it", () => {
+    // This used to validate and then write nothing at all, because the route
+    // only looked at localDate when a time came with it.
+    expect(entryUpdateSchema.parse({ localDate: "2026-09-05" })).toEqual({
+      localDate: "2026-09-05",
+    });
   });
 });

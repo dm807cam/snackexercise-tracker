@@ -38,7 +38,9 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   let suggestion: Suggestion | null = null;
   if (date === config.today) {
     const [stats, activeWindow] = await Promise.all([
-      loadStats(SUGGESTION_WINDOW, config.today, config.timeZone),
+      // No previous-window comparison: the suggestion never reads it, and this
+      // runs again after every logged, edited or deleted set.
+      loadStats(SUGGESTION_WINDOW, config.today, config.timeZone, false),
       getActiveWindow(),
     ]);
 

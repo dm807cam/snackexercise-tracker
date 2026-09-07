@@ -81,7 +81,10 @@ export function DaySpacing({ spacing }: { spacing: DaySpacingPayload }) {
 }
 
 function clock(minutes: number): string {
-  const h = Math.floor(minutes / 60) % 24;
+  // Not wrapped at 24: an active window ending at midnight is the end of this
+  // day, and printing "00:00" would put the timeline's right-hand edge before
+  // its left one — and disagree with the stats card, which says 24:00.
+  const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { entryUpdateSchema } from "@/lib/validation";
-import { toLocalDateInZone, zonedDateTimeToInstant } from "@/lib/dates";
+import { formatTime, toLocalDateInZone, zonedDateTimeToInstant } from "@/lib/dates";
 import { getAppConfig } from "@/lib/app-config";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +24,18 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     // Retiming an entry — the run you did at 06:30 and only logged at 21:00 —
     // arrives as the digits the user typed plus the day they belong to, and is
     // resolved against the app's configured zone rather than the browser's.
+    //
+    // Either half may arrive alone. A day on its own moves the entry to that
+    // day at the clock time it already had, which is the only reading of
+    // "put this on Tuesday" that does not throw information away; the
+    // alternative was accepting the field and writing nothing.
     const day = patchedDate ?? existing.localDate;
-    const performedAt = performedTime
-      ? zonedDateTimeToInstant(day, performedTime, timeZone)
+    const time =
+      performedTime ??
+      (patchedDate ? formatTime(existing.performedAt, timeZone) : undefined);
+
+    const performedAt = time
+      ? zonedDateTimeToInstant(day, time, timeZone)
       : patchedInstant
         ? new Date(patchedInstant)
         : undefined;
@@ -39,7 +48,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
           performedAt,
           // Moving an entry's time can move it to a different day. A stated day
           // is authoritative; otherwise it follows the instant.
-          localDate: performedTime
+          localDate: time
             ? day
             : performedAt
               ? toLocalDateInZone(performedAt, timeZone)
