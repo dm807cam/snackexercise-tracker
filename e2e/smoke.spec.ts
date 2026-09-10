@@ -223,13 +223,19 @@ test.describe("when it happened", () => {
     await page.goto("/");
     const today = new URL(page.url()).pathname.split("/").pop()!;
 
-    // Whatever earlier tests left behind, this day starts somewhere short of
-    // the strength target — the ring has something to say.
+    // Start from a known day rather than from whatever earlier tests left
+    // behind. Without this the opening assertion rested on one of them leaving
+    // exactly 8.0 effective sets — 0.57 below the target — so a single extra
+    // set anywhere earlier in the file would have flipped it silently.
+    // Steps are a DailyMetric and survive this, which is fine: only the
+    // strength side is asserted below.
+    await page.request.delete(`/api/days/${today}`);
+
+    await page.reload();
     const rings = page.getByRole("img", { name: /Today's targets/ });
     await expect(rings).toBeVisible();
     await expect(rings).toHaveAttribute("aria-label", /effective sets still to go/);
 
-    // A big enough session closes it, and the wording changes to match.
     const { exercises } = await (await page.request.get("/api/exercises")).json();
     const id = exercises.find((e: { name: string }) => e.name === "Deadlift").id;
     const created = await page.request.post("/api/entries", {
@@ -238,18 +244,22 @@ test.describe("when it happened", () => {
     expect(created.ok()).toBe(true);
     const entryId = (await created.json()).entries[0].id;
 
-    await page.reload();
-    await expect(page.getByRole("img", { name: /Today's targets/ })).toHaveAttribute(
-      "aria-label",
-      /strength target met/,
-    );
-    // Named as well as coloured, so the rings are never the only way to read
-    // it. Which of the two "done" headlines shows depends on whether earlier
-    // tests left cardio on this day, so match either rather than pinning state
-    // this test does not own.
-    await expect(page.getByText(/Strength done|Both targets met/)).toBeVisible();
-
-    await page.request.delete(`/api/entries/${entryId}`);
+    // Cleaned up even when an assertion throws: CI retries once against the
+    // same database, and 51 leftover effective sets would make the retry's own
+    // opening assertion impossible to satisfy.
+    try {
+      await page.reload();
+      await expect(page.getByRole("img", { name: /Today's targets/ })).toHaveAttribute(
+        "aria-label",
+        /strength target met/,
+      );
+      // Named as well as coloured, so the rings are never the only way to read
+      // it. Either "done" headline will do — whether cardio is also met depends
+      // on the day's steps, which this test does not own.
+      await expect(page.getByText(/Strength done|Both targets met/)).toBeVisible();
+    } finally {
+      await page.request.delete(`/api/entries/${entryId}`);
+    }
   });
 
   test("the day opens with a suggestion of what to train next", async ({ page }) => {

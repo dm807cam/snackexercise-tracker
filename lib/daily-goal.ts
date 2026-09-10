@@ -98,12 +98,20 @@ function side(doneRaw: number, target: number): GoalSide {
   const done = Number.isFinite(doneRaw) && doneRaw > 0 ? doneRaw : 0;
   const overshoot = target > 0 ? done / target : 0;
 
+  // `met` follows the ROUNDED remainder, not the raw one, so the three things
+  // the UI shows can never contradict each other. Deciding it on the unrounded
+  // values meant a day 0.04 sets short displayed "0 sets to go" beside an
+  // unticked label and an unclosed ring — three statements, two of them wrong.
+  // Calling 99.8% of a rough guideline "met" is the cheaper error.
+  const remaining = round(Math.max(0, target - done));
+  const met = remaining <= 0;
+
   return {
     done: round(done),
     target: round(target),
-    remaining: round(Math.max(0, target - done)),
-    fraction: Math.min(1, Math.max(0, overshoot)),
-    met: done >= target,
+    remaining,
+    fraction: met ? 1 : Math.min(1, Math.max(0, overshoot)),
+    met,
     overshoot: round(overshoot),
   };
 }

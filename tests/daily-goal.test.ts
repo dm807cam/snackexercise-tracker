@@ -55,6 +55,26 @@ describe("buildDailyGoal", () => {
     expect(goal.strength.overshoot).toBeCloseTo(3, 1);
   });
 
+  it("never shows nothing to go beside an open ring", () => {
+    // A hair under the target: `remaining` rounds to 0.0, so the label reads
+    // "0 sets to go". Deciding `met` on the raw value would leave that sitting
+    // beside an unticked label and an unclosed ring.
+    const goal = buildDailyGoal({
+      effectiveSets: STRENGTH_TARGET_PER_DAY - 0.02,
+      metMinutes: 0,
+    });
+    expect(goal.strength.remaining).toBe(0);
+    expect(goal.strength.met).toBe(true);
+    expect(goal.strength.fraction).toBe(1);
+  });
+
+  it("still owes a visible amount when it is genuinely short", () => {
+    const goal = buildDailyGoal({ effectiveSets: STRENGTH_TARGET_PER_DAY - 1, metMinutes: 0 });
+    expect(goal.strength.remaining).toBe(1);
+    expect(goal.strength.met).toBe(false);
+    expect(goal.strength.fraction).toBeLessThan(1);
+  });
+
   it("counts steps toward cardio, the way the balance marker does", () => {
     // A day view that disagreed with the stats page about whether a walking day
     // was cardio would be the app arguing with itself.
