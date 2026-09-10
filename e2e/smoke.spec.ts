@@ -219,6 +219,49 @@ test.describe("when it happened", () => {
     await page.getByRole("button", { name: "Delete entry" }).click();
   });
 
+  test("the day shows how much of today's target is left, and closes it", async ({ page }) => {
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    // Start from a known day rather than from whatever earlier tests left
+    // behind. Without this the opening assertion rested on one of them leaving
+    // exactly 8.0 effective sets — 0.57 below the target — so a single extra
+    // set anywhere earlier in the file would have flipped it silently.
+    // Steps are a DailyMetric and survive this, which is fine: only the
+    // strength side is asserted below.
+    await page.request.delete(`/api/days/${today}`);
+
+    await page.reload();
+    const rings = page.getByRole("img", { name: /Today's targets/ });
+    await expect(rings).toBeVisible();
+    await expect(rings).toHaveAttribute("aria-label", /effective sets still to go/);
+
+    const { exercises } = await (await page.request.get("/api/exercises")).json();
+    const id = exercises.find((e: { name: string }) => e.name === "Deadlift").id;
+    const created = await page.request.post("/api/entries", {
+      data: { exerciseId: id, performedTime: "12:00", localDate: today, sets: 12, reps: 5 },
+    });
+    expect(created.ok()).toBe(true);
+    const entryId = (await created.json()).entries[0].id;
+
+    // Cleaned up even when an assertion throws: CI retries once against the
+    // same database, and 51 leftover effective sets would make the retry's own
+    // opening assertion impossible to satisfy.
+    try {
+      await page.reload();
+      await expect(page.getByRole("img", { name: /Today's targets/ })).toHaveAttribute(
+        "aria-label",
+        /strength target met/,
+      );
+      // Named as well as coloured, so the rings are never the only way to read
+      // it. Either "done" headline will do — whether cardio is also met depends
+      // on the day's steps, which this test does not own.
+      await expect(page.getByText(/Strength done|Both targets met/)).toBeVisible();
+    } finally {
+      await page.request.delete(`/api/entries/${entryId}`);
+    }
+  });
+
   test("the day opens with a suggestion of what to train next", async ({ page }) => {
     await page.goto("/");
     // Named, reasoned and tappable — never a bare colour or an unexplained pick.

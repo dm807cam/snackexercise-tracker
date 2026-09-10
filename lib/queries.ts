@@ -25,6 +25,7 @@ import {
   buildStats,
   entryEffectiveSets,
   muscleCardioLoad,
+  totalEffectiveSets,
 } from "./scoring";
 import {
   DEFAULT_STEP_BASELINE,
@@ -103,19 +104,37 @@ export async function getDaySummary(
   steps: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
+  /**
+   * MET-minutes credited to the day's steps, after the baseline and the
+   * de-duplication against logged foot-based cardio. Reported apart from
+   * `metMinutes` so a caller can show the logged dose alone or the whole
+   * cardio dose, and the day view can agree with the balance marker about
+   * whether a 14,000-step day was cardio.
+   */
+  stepMetMinutes: number;
+  /** Effective sets across every muscle — the day's whole resistance dose. */
+  effectiveSets: number;
   spacing: SpacingResult;
 }> {
-  const [entries, steps, activeWindow] = await Promise.all([
+  const [entries, steps, activeWindow, stepSettings] = await Promise.all([
     getEntriesForDate(date),
     getSteps(date),
     getActiveWindow(),
+    getStepSettings(),
   ]);
+
+  const summary = summariseDay(date, entries);
+
   return {
-    ...summariseDay(date, entries),
+    ...summary,
     entries,
     steps,
     cardioMuscles: muscleCardioLoad(entries, entryMetMinutes),
     metMinutes: Math.round(entries.reduce((sum, e) => sum + entryMetMinutes(e), 0)),
+    stepMetMinutes: Math.round(
+      stepMetMinutes(steps, stepSettings, impliedStepsFromEntries(entries)),
+    ),
+    effectiveSets: round(totalEffectiveSets(summary.muscles)),
     spacing: daySpacing(
       entries.map((e) => minutesOfDayInZone(e.performedAt, timeZone)),
       activeWindow,

@@ -13,9 +13,11 @@ import { addDays, formatTime, type LocalDate } from "@/lib/dates";
 import { formatSets, type Units } from "@/lib/format";
 import type { MuscleSlug } from "@/lib/muscles";
 import type { MuscleTotals } from "@/lib/scoring";
+import { buildDailyGoal } from "@/lib/daily-goal";
 import type { Suggestion } from "@/lib/suggest";
 import { DayHeader } from "./DayHeader";
 import { DaySpacing, type DaySpacingPayload } from "./DaySpacing";
+import { TodayGoal } from "./TodayGoal";
 import { NextUp } from "./NextUp";
 import { StepsField } from "./StepsField";
 import { EntryList, type DayEntry } from "./EntryList";
@@ -31,6 +33,8 @@ export interface DayViewData {
   steps: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
+  stepMetMinutes: number;
+  effectiveSets: number;
   spacing: DaySpacingPayload;
 }
 
@@ -195,6 +199,21 @@ export function DayView({
         onClearDay={clearDay}
         hasEntries={day.entries.length > 0}
       />
+
+      {/* Only on today. "How much is left" is a statement about a day that can
+          still be changed; on a past day it would be a permanent red mark on a
+          Tuesday in August, which is nagging rather than motivation. Computed
+          on the client from numbers the day already carries, so it updates the
+          moment an entry is logged rather than waiting for a round trip. */}
+      {day.date === today && (
+        <TodayGoal
+          goal={buildDailyGoal({
+            effectiveSets: day.effectiveSets,
+            metMinutes: day.metMinutes,
+            stepMetMinutes: day.stepMetMinutes,
+          })}
+        />
+      )}
 
       {suggestion && (
         <NextUp
