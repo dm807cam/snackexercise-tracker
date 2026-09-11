@@ -160,4 +160,10 @@ export const settingsSchema = z.object({
    * Empty means the literature default; see lib/volume.ts.
    */
   perMuscleTarget: z.string().max(3).optional(),
+  /**
+   * The weekly doses each side is measured against. Empty means the
+   * public-health guideline, which is the default; see lib/targets.ts.
+   */
+  cardioTarget: z.string().max(5).optional(),
+  strengthTarget: z.string().max(4).optional(),
 });

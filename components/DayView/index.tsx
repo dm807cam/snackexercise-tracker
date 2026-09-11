@@ -8,6 +8,7 @@ import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
 import { ManualForm, type ManualDraft } from "@/components/QuickAdd/ManualForm";
 import { isEffort } from "@/lib/effort";
+import type { Targets } from "@/lib/targets";
 import { Toast, type ToastState } from "@/components/Toast";
 import { api } from "@/lib/client";
 import { addDays, formatTime, type LocalDate } from "@/lib/dates";
@@ -37,6 +38,7 @@ export interface DayViewData {
   stepMetMinutes: number;
   effectiveSets: number;
   hardSets: number;
+  targets: Targets;
   spacing: DaySpacingPayload;
 }
 
@@ -213,6 +215,7 @@ export function DayView({
         <TodayGoal
           goal={buildDailyGoal({
             hardSets: day.hardSets,
+            targets: day.targets,
             metMinutes: day.metMinutes,
             stepMetMinutes: day.stepMetMinutes,
           })}

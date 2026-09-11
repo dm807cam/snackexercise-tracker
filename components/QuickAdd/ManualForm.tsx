@@ -2,7 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { distanceUnitsFor, fromKg, fromMetres, toKg, toMetres, type Units } from "@/lib/format";
-import { EFFORT_LEVELS, effortHint, effortLabel, isEffort, type Effort } from "@/lib/effort";
+import {
+  EFFORT_LEVELS,
+  effortHint,
+  effortLabel,
+  isEffort,
+  ratesEffort,
+  type Effort,
+} from "@/lib/effort";
 import type { ExerciseOption } from "./types";
 
 export interface ManualDraft {
@@ -71,10 +78,10 @@ export function ManualForm({
   // bench press has no pace, and four dead fields on a phone is four fields to
   // scroll past at the top of the stairs.
   const isCardio = (selected?.cardioBias ?? 0) > 0;
-  // Effort is asked for wherever there is resistance work to rate. A pure run
-  // has no proximity to failure worth recording, and its effective sets are
-  // zeroed anyway, so the chips would change nothing.
-  const isPureCardio = (selected?.cardioBias ?? 0) >= 1;
+  // Effort is asked for wherever there is resistance work to rate; see
+  // ratesEffort, which the dictation confirm card shares so the two entry
+  // paths cannot disagree about which movements carry a rating.
+  const isPureCardio = !ratesEffort(selected?.cardioBias);
   const distanceUnits = distanceUnitsFor(units);
 
   // Recently used first: an alphabetical list of 67 movements is the wrong

@@ -36,16 +36,34 @@
  * an accusation — the copy in the UI says so.
  */
 
-import { CARDIO_TARGET_MET_MIN_PER_WEEK, FALLBACK_METS } from "./cardio";
-import { STRENGTH_TARGET_HARD_SETS_PER_WEEK } from "./balance";
+import { FALLBACK_METS } from "./cardio";
+import {
+  GUIDELINE_FLOOR_MET_MIN_PER_WEEK,
+  GUIDELINE_TARGETS,
+  type Targets,
+} from "./targets";
 
 export const DAYS_PER_WEEK = 7;
 
-/** Hard sets that count as a full day of resistance work. */
-export const STRENGTH_TARGET_PER_DAY = STRENGTH_TARGET_HARD_SETS_PER_WEEK / DAYS_PER_WEEK;
+/** A day's share of each weekly target. */
+export function dailyTargets(targets: Targets = GUIDELINE_TARGETS) {
+  return {
+    strength: targets.strengthHardSetsPerWeek / DAYS_PER_WEEK,
+    cardio: targets.cardioMetMinutesPerWeek / DAYS_PER_WEEK,
+  };
+}
 
-/** MET-minutes that count as a full day of aerobic work. */
-export const CARDIO_TARGET_MET_MIN_PER_DAY = CARDIO_TARGET_MET_MIN_PER_WEEK / DAYS_PER_WEEK;
+/**
+ * A day's share of the WHO aerobic minimum.
+ *
+ * Not the same thing as the target, once the target is configurable. Somebody
+ * aiming at the mortality optimum has a cardio target of 1200 MET-min a week,
+ * and passing 600 is still a real thing to have done — the ring marks it, and
+ * the copy names it, so raising your sights does not erase the achievement of
+ * meeting the guideline.
+ */
+export const CARDIO_GUIDELINE_FLOOR_PER_DAY =
+  GUIDELINE_FLOOR_MET_MIN_PER_WEEK / DAYS_PER_WEEK;
 
 export interface GoalSide {
   /** What today has actually earned, in that side's own unit. */
@@ -72,6 +90,13 @@ export interface DailyGoal {
   complete: boolean;
   /** Neither side has anything logged — the "nothing yet today" opening state. */
   empty: boolean;
+  /** Past the WHO aerobic minimum, whatever the configured target is. */
+  cardioGuidelineMet: boolean;
+  /**
+   * Where the guideline minimum sits on the cardio ring, 0..1. One when the
+   * target is the guideline, which is when there is nothing extra to mark.
+   */
+  cardioGuidelineFraction: number;
 }
 
 export function buildDailyGoal(input: {
@@ -91,18 +116,32 @@ export function buildDailyGoal(input: {
    * itself.
    */
   stepMetMinutes?: number;
+  /** The weekly doses to take a seventh of. Defaults to the guideline. */
+  targets?: Targets;
 }): DailyGoal {
-  const strength = side(input.hardSets, STRENGTH_TARGET_PER_DAY);
-  const cardio = side(
-    input.metMinutes + (input.stepMetMinutes ?? 0),
-    CARDIO_TARGET_MET_MIN_PER_DAY,
-  );
+  const perDay = dailyTargets(input.targets);
+
+  const cardioDone = input.metMinutes + (input.stepMetMinutes ?? 0);
+
+  const strength = side(input.hardSets, perDay.strength);
+  const cardio = side(cardioDone, perDay.cardio);
 
   return {
     strength,
     cardio,
     complete: strength.met && cardio.met,
     empty: strength.done <= 0 && cardio.done <= 0,
+    // Two claims, deliberately not one. "You met the public-health guideline"
+    // and "you met the goal you set" are different sentences, and collapsing
+    // them meant a user aiming higher lost the first one entirely.
+    // Compared on the raw figure, not on `cardio.done`, which is rounded to a
+    // tenth for display: exactly the guideline share is 85.714 MET-minutes, and
+    // 85.7 is not greater than or equal to it.
+    cardioGuidelineMet: cardioDone >= CARDIO_GUIDELINE_FLOOR_PER_DAY,
+    cardioGuidelineFraction:
+      perDay.cardio > 0
+        ? Math.min(1, CARDIO_GUIDELINE_FLOOR_PER_DAY / perDay.cardio)
+        : 1,
   };
 }
 
@@ -154,6 +193,11 @@ export function goalHeadline(goal: DailyGoal): string {
   if (goal.empty) return "The whole day is still ahead";
   if (goal.strength.met) return "Strength done — cardio still open";
   if (goal.cardio.met) return "Cardio done — strength still open";
+  // Worth saying on its own: someone aiming above the guideline has passed a
+  // real threshold, and an open ring should not be the only thing they see.
+  if (goal.cardioGuidelineMet && goal.cardioGuidelineFraction < 1) {
+    return "Past the activity guideline — still short of your target";
+  }
   return "Part way there";
 }
 

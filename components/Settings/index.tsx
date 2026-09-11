@@ -13,6 +13,17 @@ import {
   MIN_PER_MUSCLE_TARGET,
   normalisePerMuscleTarget,
 } from "@/lib/volume";
+import {
+  GUIDELINE_FLOOR_MET_MIN_PER_WEEK,
+  MAX_CARDIO_TARGET,
+  MAX_STRENGTH_TARGET,
+  MIN_CARDIO_TARGET,
+  MIN_STRENGTH_TARGET,
+  normaliseTargets,
+  presetFor,
+  presetTargets,
+  type Targets,
+} from "@/lib/targets";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
 import { ModelPicker } from "./ModelPicker";
@@ -32,6 +43,7 @@ export function SettingsView({
     dayStartHour: number;
     dayEndHour: number;
     perMuscleTarget: number;
+    targets: Targets;
   };
   exercises: ExerciseOption[];
 }) {
@@ -51,6 +63,29 @@ export function SettingsView({
   // editing 10 to 12 and back to 10 inside that window suppressed the second
   // save and left 12 in the database under a field reading 10.
   const [savedTarget, setSavedTarget] = useState(initial.perMuscleTarget);
+  const [targets, setTargets] = useState(initial.targets);
+  // What is actually stored, for the same reason `savedTarget` above tracks it:
+  // `initial` only changes once the router refresh after a save lands, so a
+  // preset tap followed by typing the old number back inside that window would
+  // suppress the second save and leave the field and the database disagreeing.
+  const [savedTargets, setSavedTargets] = useState(initial.targets);
+  const preset = presetFor(targets);
+
+  function saveTargets(next: Targets) {
+    const stored = normaliseTargets(next);
+    setTargets(stored);
+    if (
+      stored.cardioMetMinutesPerWeek === savedTargets.cardioMetMinutesPerWeek &&
+      stored.strengthHardSetsPerWeek === savedTargets.strengthHardSetsPerWeek
+    ) {
+      return;
+    }
+    setSavedTargets(stored);
+    save({
+      cardioTarget: String(stored.cardioMetMinutesPerWeek),
+      strengthTarget: String(stored.strengthHardSetsPerWeek),
+    });
+  }
   const [toast, setToast] = useState<ToastState | null>(null);
   const [editing, setEditing] = useState<ExerciseOption | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,9 +199,11 @@ export function SettingsView({
 
         <Field
           label="Timezone"
+          htmlFor="timezone"
           hint="Decides where one day ends and the next begins. Defaults to the container's TZ."
         >
           <input
+            id="timezone"
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
             onBlur={() => timezone !== initial.timezone && save({ timezone })}
@@ -214,9 +251,11 @@ export function SettingsView({
 
         <Field
           label="Step baseline"
+          htmlFor="step-baseline"
           hint={`Steps below this are ordinary living rather than training, so they earn no cardio credit. Leave it empty and the app uses the quiet quarter of your own days — currently ${initial.resolvedBaseline.toLocaleString()}.`}
         >
           <input
+            id="step-baseline"
             type="number"
             inputMode="numeric"
             min={0}
@@ -288,12 +327,92 @@ export function SettingsView({
         </Field>
       </Section>
 
+      <Section title="Weekly targets">
+        <Field
+          label="What you are aiming at"
+          hint={
+            preset === "longevity"
+              ? "1,200 MET-minutes of cardio a week — the top of the WHO range, and the bottom of the band where the large cohort studies put the lowest all-cause mortality (Arem 2015; Lee 2022). Strength is unchanged on purpose: the mortality-optimal resistance dose is lower than this, so raising it here would mean moving away from the hypertrophy dose, not toward it."
+              : preset === "guideline"
+                ? "600 MET-minutes of cardio a week — the WHO minimum, which is 150 min moderate or 75 vigorous. The strength number is a hypertrophy dose rather than a public-health one; the two goals want different amounts, so the app shows which it is measuring."
+                : "Your own numbers. The rings, the balance marker and the radar's cardio line all move with them."
+          }
+        >
+          <div className="grid grid-cols-3 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
+            {(["guideline", "longevity", "custom"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={preset === value}
+                // "Custom" is a state, not a command: it is what the picker
+                // reads when the numbers below have been edited, and tapping it
+                // would have nothing to apply.
+                disabled={value === "custom"}
+                onClick={() => saveTargets(presetTargets(value))}
+                className="tap rounded-md py-2 text-sm font-medium capitalize disabled:opacity-100"
+                style={{
+                  background: preset === value ? "var(--surface)" : "transparent",
+                  color: preset === value ? "var(--text)" : "var(--text-dim)",
+                }}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field
+          label="Cardio (MET-minutes a week)"
+          htmlFor="cardio-target"
+          hint={`150 minutes of moderate work is about 600. The activity guideline is ${GUIDELINE_FLOOR_MET_MIN_PER_WEEK}, and the cardio ring marks it whatever you set here, so passing it is still visible when you are aiming higher. Raising this also means a given run is a smaller share of your week, so the radar's cardio line and the calendar's shading move with it.`}
+        >
+          <input
+            id="cardio-target"
+            type="number"
+            inputMode="numeric"
+            min={MIN_CARDIO_TARGET}
+            max={MAX_CARDIO_TARGET}
+            step={50}
+            value={targets.cardioMetMinutesPerWeek}
+            onChange={(e) =>
+              setTargets((t) => ({ ...t, cardioMetMinutesPerWeek: Number(e.target.value) }))
+            }
+            onBlur={() => saveTargets(targets)}
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
+        </Field>
+
+        <Field
+          label="Strength (hard sets a week)"
+          htmlFor="strength-target"
+          hint="A hypertrophy dose, not a public-health one — about 27 is roughly 10 sets per muscle group across the major groups. The mortality curve for resistance work peaks lower than this and turns down past about 130 minutes a week (Momma 2022), so this number serves the physique goal rather than the longevity one, and the app says so rather than averaging them."
+        >
+          <input
+            id="strength-target"
+            type="number"
+            inputMode="numeric"
+            min={MIN_STRENGTH_TARGET}
+            max={MAX_STRENGTH_TARGET}
+            value={targets.strengthHardSetsPerWeek}
+            onChange={(e) =>
+              setTargets((t) => ({ ...t, strengthHardSetsPerWeek: Number(e.target.value) }))
+            }
+            onBlur={() => saveTargets(targets)}
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
+        </Field>
+      </Section>
+
       <Section title="How much is enough">
         <Field
           label="Hard sets per muscle, per week"
+          htmlFor="per-muscle-target"
           hint={`The reference the radar and the "needs attention" list are read against. About 10 is where the hypertrophy dose–response is clearly established; gains continue with diminishing returns to around 20, which is the fainter outer ring. Raise it if you are deliberately running a higher-volume block — the chart should agree with what you are actually aiming at rather than with whoever wrote the default.`}
         >
           <input
+            id="per-muscle-target"
             type="number"
             inputMode="numeric"
             min={MIN_PER_MUSCLE_TARGET}
@@ -597,15 +716,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({
   label,
   hint,
+  htmlFor,
   children,
 }: {
   label: string;
   hint?: string;
+  /**
+   * The id of the control this labels, where there is exactly one.
+   *
+   * A real <label> rather than a paragraph, so the control has an accessible
+   * name: a bare number input reads as "edit text, blank" to a screen reader,
+   * and the words sitting above it are not attached to it in any way a
+   * assistive technology can follow. Optional because some fields wrap a group
+   * of controls, which carry their own aria-labels.
+   */
+  htmlFor?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <p className="mb-2 text-sm font-medium">{label}</p>
+      {htmlFor ? (
+        <label className="mb-2 block text-sm font-medium" htmlFor={htmlFor}>
+          {label}
+        </label>
+      ) : (
+        <p className="mb-2 text-sm font-medium">{label}</p>
+      )}
       {children}
       {hint && <p className="mt-2 text-xs text-dim">{hint}</p>}
     </div>

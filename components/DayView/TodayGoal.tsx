@@ -87,7 +87,18 @@ function Rings({ goal }: { goal: DailyGoal }) {
       {/* Rotated so both rings start and close at twelve o'clock. */}
       <g transform="rotate(-90 50 50)">
         <Ring radius={42} fraction={goal.strength.fraction} colour="var(--strength)" />
-        <Ring radius={28} fraction={goal.cardio.fraction} colour="var(--cardio)" />
+        <Ring
+          radius={28}
+          fraction={goal.cardio.fraction}
+          colour="var(--cardio)"
+          // The public-health minimum, when the user is aiming above it. A ring
+          // that closed only at their own higher target would hide the moment
+          // they passed the guideline — which is a real threshold, and the one
+          // the evidence for "some is much better than none" actually attaches
+          // to. Drawn as a notch in the track, not a second arc: it is a
+          // landmark on the way, not a competing goal.
+          mark={goal.cardioGuidelineFraction < 1 ? goal.cardioGuidelineFraction : null}
+        />
       </g>
     </svg>
   );
@@ -97,12 +108,16 @@ function Ring({
   radius,
   fraction,
   colour,
+  mark,
 }: {
   radius: number;
   fraction: number;
   colour: string;
+  /** A landmark on the track, 0..1, or null for none. */
+  mark?: number | null;
 }) {
   const circumference = 2 * Math.PI * radius;
+  const markAngle = mark == null ? null : mark * 360;
 
   return (
     <>
@@ -129,6 +144,17 @@ function Ring({
         strokeLinecap={fraction > 0.01 ? "round" : "butt"}
         style={{ transition: "stroke-dashoffset 400ms ease" }}
       />
+      {markAngle != null && (
+        <line
+          x1={50 + (radius - 5.5) * Math.cos((markAngle * Math.PI) / 180)}
+          y1={50 + (radius - 5.5) * Math.sin((markAngle * Math.PI) / 180)}
+          x2={50 + (radius + 5.5) * Math.cos((markAngle * Math.PI) / 180)}
+          y2={50 + (radius + 5.5) * Math.sin((markAngle * Math.PI) / 180)}
+          stroke="var(--surface)"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      )}
     </>
   );
 }
@@ -176,5 +202,13 @@ function describe(goal: DailyGoal): string {
   const cardio = goal.cardio.met
     ? "cardio target met"
     : `${formatSets(goal.cardio.remaining)} MET-minutes still to go`;
-  return `Today's targets: ${strength}; ${cardio}.`;
+  // The notch is drawn, so it has to be said as well: a mark nobody can read
+  // out is decoration.
+  const guideline =
+    goal.cardioGuidelineFraction < 1
+      ? goal.cardioGuidelineMet
+        ? " Past the activity guideline."
+        : " The mark on the cardio ring is the activity guideline."
+      : "";
+  return `Today's targets: ${strength}; ${cardio}.${guideline}`;
 }

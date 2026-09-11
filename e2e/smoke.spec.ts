@@ -460,3 +460,39 @@ test.describe("getting stronger", () => {
     }
   });
 });
+
+/**
+ * Targets reach further than any other setting: they move the rings, the
+ * balance marker, the suggestion's cardio deficit and the exchange rate the
+ * radar and calendar are drawn against. Worth one pass through the real app.
+ */
+test.describe("what you are aiming at", () => {
+  test("the longevity preset raises cardio and leaves strength alone", async ({ page }) => {
+    try {
+      await page.goto("/settings");
+      await expect(page.getByRole("heading", { name: "Weekly targets" })).toBeVisible();
+
+      const cardio = page.getByLabel("Cardio (MET-minutes a week)");
+      const strength = page.getByLabel("Strength (hard sets a week)");
+      await expect(cardio).toHaveValue("600");
+      const before = await strength.inputValue();
+
+      await page.getByRole("button", { name: "longevity", exact: true }).click();
+      await expect(page.getByText("Saved")).toBeVisible();
+      await expect(cardio).toHaveValue("1200");
+      // The mortality-optimal resistance dose is lower than the hypertrophy
+      // one, so a longevity preset must not move it.
+      await expect(strength).toHaveValue(before);
+
+      // And the marker's own explanation names the number it used, rather than
+      // a constant that no longer tells the whole truth.
+      await page.goto("/stats");
+      await expect(page.getByText(/1,200 MET-minutes/)).toBeVisible();
+      await expect(page.getByText(/activity guideline itself is 600/)).toBeVisible();
+    } finally {
+      await page.goto("/settings");
+      await page.getByRole("button", { name: "guideline", exact: true }).click();
+      await expect(page.getByLabel("Cardio (MET-minutes a week)")).toHaveValue("600");
+    }
+  });
+});

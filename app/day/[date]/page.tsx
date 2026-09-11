@@ -48,6 +48,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       axes: stats.axes,
       daysSinceCardio: stats.daysSinceCardio,
       cardioMetMinutesPerWeek: stats.balance.detail.metMinutesPerWeek,
+      cardioTargetMetMinutesPerWeek: stats.targets.cardioMetMinutesPerWeek,
       exercises,
       recentIds,
       axisOf: axisForMuscle,
@@ -78,6 +79,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         stepMetMinutes: summary.stepMetMinutes,
         effectiveSets: summary.effectiveSets,
         hardSets: summary.hardSets,
+        targets: summary.targets,
         spacing: summary.spacing,
       }}
       exercises={exercises}

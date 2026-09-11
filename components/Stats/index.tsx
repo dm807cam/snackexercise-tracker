@@ -62,6 +62,8 @@ export interface StatsPayload {
   perMuscleTarget: number;
   /** Per-movement progression, over its own longer window. */
   progress: ProgressPayload[];
+  /** The weekly doses this window was measured against. */
+  targets: { cardioMetMinutesPerWeek: number; strengthHardSetsPerWeek: number };
 }
 
 /**
@@ -167,6 +169,7 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           data={stats.axes}
           showPrevious={showPrevious}
           perMuscleTarget={stats.perMuscleTarget}
+          targets={stats.targets}
         />
 
         <label className="mt-1 flex items-center justify-center gap-2 text-xs text-dim">

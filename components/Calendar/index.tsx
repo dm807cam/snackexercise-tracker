@@ -13,18 +13,25 @@ import {
 } from "@/lib/dates";
 import { api } from "@/lib/client";
 import { shadeIntensity } from "@/lib/scoring";
-import { MET_MIN_PER_EFFECTIVE_SET } from "@/lib/balance";
+import { metMinutesPerEffectiveSet, type Targets } from "@/lib/targets";
 import type { DayLoad } from "@/lib/queries";
 
 export function CalendarView({
   initialMonth,
   initialLoad,
   today,
+  targets,
 }: {
   initialMonth: LocalDate;
   /** Each day's strength and cardio load, keyed by "YYYY-MM-DD". */
   initialLoad: Record<string, DayLoad>;
   today: LocalDate;
+  /**
+   * The weekly doses the stored loads were converted against. Needed to turn
+   * the cardio figure back into MET-minutes for the label, and carried rather
+   * than imported because the rate moves with the user's cardio target.
+   */
+  targets: Targets;
 }) {
   const router = useRouter();
   const [month, setMonth] = useState(initialMonth);
@@ -117,7 +124,7 @@ export function CalendarView({
               key={date}
               href={`/day/${date}`}
               prefetch={false}
-              aria-label={`${date}: ${describe(day)}`}
+              aria-label={`${date}: ${describe(day, targets)}`}
               className="relative grid aspect-square place-items-center rounded-lg text-sm tabular-nums transition-transform active:scale-95"
               style={{
                 // Keyed on the wash, not on the total: a cardio-only day has
@@ -226,7 +233,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /** Both channels in words, so the split is never carried by colour alone. */
-function describe(day: DayLoad | undefined): string {
+function describe(day: DayLoad | undefined, targets: Targets): string {
   if (!day || day.total <= 0) return "nothing logged";
 
   const parts: string[] = [];
@@ -234,7 +241,9 @@ function describe(day: DayLoad | undefined): string {
   // Back into the unit the user would recognise from the day page and the
   // balance bar; the stored figure is on the effective-set scale.
   if (day.cardio > 0) {
-    parts.push(`${Math.round(day.cardio * MET_MIN_PER_EFFECTIVE_SET)} cardio MET-minutes`);
+    parts.push(
+      `${Math.round(day.cardio * metMinutesPerEffectiveSet(targets))} cardio MET-minutes`,
+    );
   }
   return parts.join(", ");
 }

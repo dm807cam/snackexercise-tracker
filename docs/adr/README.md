@@ -13,7 +13,7 @@ accident.
 | [0002](./0002-cardio-bias-is-continuous.md) | `cardioBias` is a float, not a modality enum | Accepted |
 | [0003](./0003-steps-are-a-daily-metric.md) | Steps get their own table, keyed on `localDate` | Accepted |
 | [0004](./0004-met-minutes-as-the-cardio-currency.md) | Cardio is scored in MET-minutes | Accepted |
-| [0005](./0005-guideline-normalised-balance-index.md) | The balance marker normalises each side by its own guideline | Accepted, amended by 0016 |
+| [0005](./0005-guideline-normalised-balance-index.md) | The balance marker normalises each side by its own guideline | Accepted, amended by 0016, 0019 |
 | [0006](./0006-beta-prior-and-uncertainty-band.md) | A Beta prior supplies both the marker and its band | Accepted |
 | [0007](./0007-steps-are-discounted-and-personally-baselined.md) | Steps count at half weight above a personal baseline | Accepted, contested |
 | [0008](./0008-cardio-stays-off-the-radar.md) | Cardio contributes no effective sets | Accepted |
@@ -27,6 +27,7 @@ accident.
 | [0016](./0016-the-scalar-dose-is-hard-sets.md) | The scalar strength dose is hard sets, not summed effective sets | Accepted, amends 0005 |
 | [0017](./0017-the-radar-is-read-against-an-absolute-target.md) | Volume is read against an absolute per-muscle target, not the user's best spoke | Accepted |
 | [0018](./0018-progression-is-a-per-movement-best-set.md) | Progression is a per-movement best set; a stall is weeks without one moving | Accepted |
+| [0019](./0019-targets-are-configurable-and-the-two-claims-are-separate.md) | The weekly targets are configurable, and the two claims are kept apart | Accepted, amends 0005 |
 
 ## Format
 

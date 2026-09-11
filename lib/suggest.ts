@@ -35,7 +35,7 @@
  * nothing in the app is gated on following it.
  */
 
-import { CARDIO_TARGET_MET_MIN_PER_WEEK } from "./cardio";
+import { GUIDELINE_TARGETS } from "./targets";
 import { type AxisSlug, axisLabel } from "./muscles";
 import type { AxisStat } from "./scoring";
 import { DEFAULT_ACTIVE_WINDOW, TARGET_BOUTS, formatGap, type ActiveWindow } from "./spacing";
@@ -89,8 +89,15 @@ export function rankAxes(params: {
   daysSinceCardio: number | null;
   /** From the balance breakdown; decides how thin the cardio side is. */
   cardioMetMinutesPerWeek: number;
+  /** The configured weekly cardio dose. Defaults to the guideline. */
+  cardioTargetMetMinutesPerWeek?: number;
 }): SuggestionCandidate[] {
-  const { axes, daysSinceCardio, cardioMetMinutesPerWeek } = params;
+  const {
+    axes,
+    daysSinceCardio,
+    cardioMetMinutesPerWeek,
+    cardioTargetMetMinutesPerWeek = GUIDELINE_TARGETS.cardioMetMinutesPerWeek,
+  } = params;
 
   const candidates: SuggestionCandidate[] = axes.map((axis) => ({
     axis: axis.axis,
@@ -108,10 +115,10 @@ export function rankAxes(params: {
     label: "Cardio",
     daysSince: daysSinceCardio,
     perWeek: cardioMetMinutesPerWeek,
-    target: CARDIO_TARGET_MET_MIN_PER_WEEK,
+    target: cardioTargetMetMinutesPerWeek,
     score: scoreOf(
       daysSinceCardio,
-      volumeDeficit(cardioMetMinutesPerWeek, CARDIO_TARGET_MET_MIN_PER_WEEK),
+      volumeDeficit(cardioMetMinutesPerWeek, cardioTargetMetMinutesPerWeek),
     ),
   });
 
@@ -216,6 +223,7 @@ export function buildSuggestion(params: {
   axes: readonly AxisStat[];
   daysSinceCardio: number | null;
   cardioMetMinutesPerWeek: number;
+  cardioTargetMetMinutesPerWeek?: number;
   exercises: readonly ExerciseChoice[];
   recentIds: readonly string[];
   axisOf: (muscle: string) => AxisSlug | undefined;
