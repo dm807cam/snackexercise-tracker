@@ -121,7 +121,57 @@ export function muscleCardioLoad<T extends ScoredEntry>(
   return totals;
 }
 
-/** Total effective sets one entry contributes to the strength side. */
+/**
+ * Effective sets one logged set of a movement generates — the sum of its
+ * muscle weights.
+ *
+ * 1.0 for a triceps extension, 2.25 for a push-up, 4.25 for a deadlift. It is a
+ * property of the movement's FAN-OUT ACROSS MUSCLES, not of how much work was
+ * done, which is why it has to be divided back out wherever effective sets are
+ * collapsed into a single number. See `entryHardSets`.
+ */
+export function muscleWeightSum(exercise: { muscles: { muscle: string; weight: number }[] }): number {
+  return exercise.muscles.reduce((sum, m) => sum + m.weight, 0);
+}
+
+/**
+ * One entry's contribution to the SCALAR strength dose: hard sets.
+ *
+ * `entryEffectiveSets` divided by the movement's weight sum — the multi-muscle
+ * fan-out cancels, leaving `sets x (1 - cardioBias) x effort`, which is the
+ * hard-set count. Written out rather than divided so no movement with an empty
+ * mapping can divide by zero, and so the arithmetic is legible.
+ *
+ * WHY THE VECTOR AND THE SCALAR DIFFER. Per muscle, a deadlift really does
+ * train six of them, and the unnormalised weights are correct for the body map,
+ * the radar and "days since you trained hamstrings". Summed into one number
+ * they are not: a deadlift is not four and a quarter times the dose of a curl,
+ * and treating it as such closed the daily ring four times faster on compounds
+ * and pushed the balance marker strength-ward for anyone who squats.
+ *
+ * It also makes the targets invariant to the catalogue. The muscle weightings
+ * are editable in Settings, so the old scalar moved the daily target every time
+ * someone adjusted a row.
+ */
+export function entryHardSets(entry: ScoredEntry): number {
+  const strength = strengthWeight(entry.exercise);
+  if (strength <= 0) return 0;
+  // A movement with nothing mapped credits no muscle, so it is no dose either.
+  if (muscleWeightSum(entry.exercise) <= 0) return 0;
+
+  const sets = entry.sets > 0 ? entry.sets : 1;
+  return sets * strength * effortMultiplier(entry.effort);
+}
+
+/** Hard sets across a set of entries — the window's whole resistance dose. */
+export function totalHardSets(entries: readonly ScoredEntry[]): number {
+  return entries.reduce((sum, entry) => sum + entryHardSets(entry), 0);
+}
+
+/**
+ * Total effective sets one entry contributes, summed across every muscle it
+ * trains. The DRAWING scale — use `entryHardSets` for anything that is a dose.
+ */
 export function entryEffectiveSets(entry: ScoredEntry): number {
   const sets = entry.sets > 0 ? entry.sets : 1;
   const strength = strengthWeight(entry.exercise);

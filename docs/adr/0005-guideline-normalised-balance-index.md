@@ -13,8 +13,8 @@ Each side is divided by its own weekly guideline dose before the two are
 compared:
 
 ```
-S = effective sets (strength-weighted)  /  60
-C = MET-minutes (incl. steps)           /  600
+S = hard sets (strength- and effort-weighted)  /  ~27
+C = MET-minutes (incl. steps)                  /  600
 ```
 
 The marker is cardio's share of `S + C`. Both are **window totals** expressed in
@@ -42,14 +42,16 @@ and a rate throws that away — see ADR 6, which depends on this.
 ## The targets
 
 - **600 MET-min/week** is the WHO's aerobic guideline, per ADR 4.
-- **60 effective sets/week** is calibrated to this app's own scale, not lifted
-  from a paper: the 1.0/0.5/0.25 convention means one hard set generates about
-  2.2 effective sets, so 60 is roughly 27 hard sets a week — consistent with
-  "muscle-strengthening on 2+ days" and with ~10 sets per muscle group per week.
+- **~27 hard sets/week** is calibrated to this app's own scale, not lifted from
+  a paper — consistent with "muscle-strengthening on 2+ days" and with ~10 sets
+  per muscle group per week across the major groups.
 
-This second number is a property of the scale, and if the muscle weightings are
-ever edited in Settings it drifts with them. It is commented as such in
-`lib/balance.ts` so it is not mistaken for a literature value.
+**The strength side counts hard sets, not effective sets** — amended by
+[0016](./0016-the-scalar-dose-is-hard-sets.md). Effective sets fan out across
+every muscle a movement trains, so summing them into one number made a deadlift
+4.25x the dose of a triceps extension at identical effort, and moved the target
+whenever the weightings were edited in Settings. The per-muscle vector is
+unchanged and still correct; only the collapse to a scalar was wrong.
 
 ## Rejected
 

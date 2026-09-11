@@ -1,12 +1,7 @@
 "use client";
 
 import { formatSets } from "@/lib/format";
-import {
-  goalHeadline,
-  remainingCardioMinutes,
-  remainingHardSets,
-  type DailyGoal,
-} from "@/lib/daily-goal";
+import { goalHeadline, remainingCardioMinutes, type DailyGoal } from "@/lib/daily-goal";
 
 /**
  * What is still left of today, drawn as two closing rings.
@@ -26,7 +21,6 @@ import {
  * copy does not imply it is; the app has no streak to break.
  */
 export function TodayGoal({ goal }: { goal: DailyGoal }) {
-  const sets = remainingHardSets(goal);
   const minutes = remainingCardioMinutes(goal);
 
   return (
@@ -46,7 +40,11 @@ export function TodayGoal({ goal }: { goal: DailyGoal }) {
                 ? `${formatSets(goal.strength.done)} of ${formatSets(goal.strength.target)} sets`
                 : `${formatSets(goal.strength.remaining)} sets to go`
             }
-            hint={goal.strength.met ? null : sets > 0 ? `about ${sets} more` : "almost there"}
+            // No translation line: the strength target is counted in hard sets,
+            // so the remainder is already the thing to go and do. It used to
+            // divide by an assumed 2.2 effective sets per set, which was wrong
+            // by a factor of two in both directions depending on the movement.
+            hint={null}
           />
           <Row
             colour="var(--cardio)"
@@ -168,7 +166,7 @@ function Row({
 function describe(goal: DailyGoal): string {
   const strength = goal.strength.met
     ? "strength target met"
-    : `${formatSets(goal.strength.remaining)} effective sets still to go`;
+    : `${formatSets(goal.strength.remaining)} sets still to go`;
   const cardio = goal.cardio.met
     ? "cardio target met"
     : `${Math.round(goal.cardio.remaining)} MET-minutes still to go`;

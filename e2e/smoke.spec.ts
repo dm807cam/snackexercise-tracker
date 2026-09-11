@@ -224,17 +224,16 @@ test.describe("when it happened", () => {
     const today = new URL(page.url()).pathname.split("/").pop()!;
 
     // Start from a known day rather than from whatever earlier tests left
-    // behind. Without this the opening assertion rested on one of them leaving
-    // exactly 8.0 effective sets — 0.57 below the target — so a single extra
-    // set anywhere earlier in the file would have flipped it silently.
-    // Steps are a DailyMetric and survive this, which is fine: only the
-    // strength side is asserted below.
+    // behind: the strength target is about 3.9 hard sets, so a couple of sets
+    // left over from an earlier test would close it and flip this assertion
+    // silently. Steps are a DailyMetric and survive this, which is fine: only
+    // the strength side is asserted below.
     await page.request.delete(`/api/days/${today}`);
 
     await page.reload();
     const rings = page.getByRole("img", { name: /Today's targets/ });
     await expect(rings).toBeVisible();
-    await expect(rings).toHaveAttribute("aria-label", /effective sets still to go/);
+    await expect(rings).toHaveAttribute("aria-label", /sets still to go/);
 
     const { exercises } = await (await page.request.get("/api/exercises")).json();
     const id = exercises.find((e: { name: string }) => e.name === "Deadlift").id;
@@ -245,7 +244,7 @@ test.describe("when it happened", () => {
     const entryId = (await created.json()).entries[0].id;
 
     // Cleaned up even when an assertion throws: CI retries once against the
-    // same database, and 51 leftover effective sets would make the retry's own
+    // same database, and 12 leftover hard sets would make the retry's own
     // opening assertion impossible to satisfy.
     try {
       await page.reload();

@@ -269,6 +269,10 @@ S = Σ effectiveSets(entry) × (1 − cardioBias)          /  60
 C = [ Σ metMinutes(entry) × cardioBias  +  Σ stepMetMinutes(day) ]  /  600
 ```
 
+> **Amended.** The strength side now counts **hard sets** (~27/week), not
+> summed effective sets. See ADR 0016; the reasoning below stands, but the
+> scalar it applies to is the normalised one.
+
 - **Strength target 60 effective sets/week.** Effective sets rather than raw
   sets because the pipeline already computes them and they weight a deadlift
   (4.25) above a wrist curl (1.0), which is what a load proxy should do. Since

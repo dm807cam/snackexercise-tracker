@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   balanceFrom,
   buildBalance,
-  STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK,
+  STRENGTH_TARGET_HARD_SETS_PER_WEEK,
   type BalanceEntry,
 } from "@/lib/balance";
 import type { StepSettings } from "@/lib/cardio";
@@ -286,12 +286,91 @@ describe("buildBalance", () => {
       stepSettings: { mode: "off", baseline: 4000 },
     });
 
+    // Both scales are reported: hard sets are the dose the marker is placed on,
+    // effective sets are what the radar's spokes add up to.
+    expect(result.detail.hardSets).toBeCloseTo(171, 1);
+    expect(result.detail.hardSetsPerWeek).toBeCloseTo(39.9, 1);
     expect(result.detail.effectiveSets).toBeCloseTo(376.2, 1);
     expect(result.detail.effectiveSetsPerWeek).toBeCloseTo(87.8, 1);
-    expect(result.strengthDose).toBeCloseTo(
-      376.2 / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK,
-      2,
-    );
+    expect(result.strengthDose).toBeCloseTo(171 / STRENGTH_TARGET_HARD_SETS_PER_WEEK, 2);
+  });
+
+  describe("the dose does not depend on how many muscles a movement touches", () => {
+    /** Deadlift-shaped: six muscles, weights summing to 4.25. */
+    function compound(sets: number): BalanceEntry {
+      return entry({
+        localDate: START,
+        sets,
+        exercise: {
+          cardioBias: 0,
+          mets: null,
+          muscles: [
+            { muscle: "hamstrings", weight: 1 },
+            { muscle: "glutes", weight: 1 },
+            { muscle: "lower-back", weight: 1 },
+            { muscle: "traps", weight: 0.5 },
+            { muscle: "forearms", weight: 0.5 },
+            { muscle: "lats", weight: 0.25 },
+          ],
+        },
+      });
+    }
+
+    /** Triceps-extension-shaped: one muscle, weight 1.0. */
+    function isolation(sets: number): BalanceEntry {
+      return entry({
+        localDate: START,
+        sets,
+        exercise: {
+          cardioBias: 0,
+          mets: null,
+          muscles: [{ muscle: "triceps", weight: 1 }],
+        },
+      });
+    }
+
+    const dose = (entries: BalanceEntry[]) =>
+      buildBalance({
+        windowDays: WINDOW,
+        entries,
+        stepsByDate: {},
+        stepSettings: { mode: "off", baseline: 4000 },
+      });
+
+    it("scores the same number of sets the same, compound or isolation", () => {
+      // The defect this fixes: the summed effective sets made a deadlift 4.25x
+      // the dose of a triceps extension, so a lifter who squats read as
+      // strength-dominant against one who curls at identical hard-set counts.
+      expect(dose([compound(10)]).strengthDose).toBeCloseTo(
+        dose([isolation(10)]).strengthDose,
+        10,
+      );
+    });
+
+    it("still credits the two movements differently per muscle", () => {
+      // The per-muscle vector is correct as it stands — a deadlift really does
+      // train six of them — and only the scalar collapse was wrong.
+      expect(dose([compound(10)]).detail.effectiveSets).toBeCloseTo(42.5, 5);
+      expect(dose([isolation(10)]).detail.effectiveSets).toBeCloseTo(10, 5);
+    });
+
+    it("does not move when the muscle weightings are edited", () => {
+      // They are editable in Settings, so a dose derived from them silently
+      // restated every past week whenever someone adjusted a row.
+      const edited = entry({
+        localDate: START,
+        sets: 10,
+        exercise: {
+          cardioBias: 0,
+          mets: null,
+          muscles: [
+            { muscle: "hamstrings", weight: 1 },
+            { muscle: "glutes", weight: 0.25 },
+          ],
+        },
+      });
+      expect(dose([edited]).strengthDose).toBeCloseTo(dose([compound(10)]).strengthDose, 10);
+    });
   });
 
   it("turning steps off removes their contribution completely", () => {

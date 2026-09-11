@@ -36,6 +36,7 @@ export interface DayViewData {
   metMinutes: number;
   stepMetMinutes: number;
   effectiveSets: number;
+  hardSets: number;
   spacing: DaySpacingPayload;
 }
 
@@ -211,7 +212,7 @@ export function DayView({
       {day.date === today && (
         <TodayGoal
           goal={buildDailyGoal({
-            effectiveSets: day.effectiveSets,
+            hardSets: day.hardSets,
             metMinutes: day.metMinutes,
             stepMetMinutes: day.stepMetMinutes,
           })}
