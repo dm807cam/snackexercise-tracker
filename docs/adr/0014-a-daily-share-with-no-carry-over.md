@@ -1,6 +1,6 @@
 # 14. Today's target is a flat seventh, and nothing carries over
 
-**Status:** Accepted · 2026-09-07
+**Status:** Accepted · 2026-09-07 · amended by [0016](./0016-the-scalar-dose-is-hard-sets.md)
 
 ## Context
 
@@ -13,8 +13,15 @@ left in me that I owe today?" — and a weekly figure is the wrong *shape* for i
 
 The day view carries a **daily target for each side: a seventh of that side's
 weekly guideline**, computed from the existing constants rather than written out
-again. 60 effective sets and 600 MET-minutes become ~8.6 sets and ~86
-MET-minutes a day.
+again. ~27 hard sets and 600 MET-minutes become ~3.9 sets and ~86 MET-minutes a
+day.
+
+> **Amended by [0016](./0016-the-scalar-dose-is-hard-sets.md).** The strength
+> side originally read a seventh of 60 *effective* sets, ~8.6 a day. Summed
+> effective sets turned out to be an artefact of how many muscles a movement
+> fans out across, so the dose is now hard sets. The structure of this decision
+> — a flat seventh, derived from the weekly constants, with no carry-over — is
+> unchanged.
 
 **Nothing carries over.** A huge Tuesday does not buy Wednesday off, and an
 empty Monday does not make Tuesday owe double.
@@ -69,7 +76,11 @@ A rest day shows two open rings. That is the cost of a daily goal and it is
 accepted deliberately: the copy never scolds, there is nothing to break, and the
 headline on an empty day reads "The whole day is still ahead".
 
-The remaining amount is also translated into something actionable — "about 4
-more sets", "about 14 min" — using the ~2.2 effective-sets-per-hard-set figure
-the strength target is itself calibrated against, and the app's generic 6 METs.
-Both are rough, both say "about", and the honest units stay beside them.
+The cardio remainder is also translated into something actionable — "about 14
+min" — using the app's generic 6 METs. It is rough, it says "about", and the
+honest unit stays beside it.
+
+The strength side had the same translation, dividing by ~2.2 effective sets per
+hard set. [0016](./0016-the-scalar-dose-is-hard-sets.md) removed it: the target
+is now counted in hard sets, so the remainder already is the actionable number
+and one figure does the work of two.

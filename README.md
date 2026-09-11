@@ -127,14 +127,19 @@ session as badly timed would just make the number something to ignore.
 ### How much is left today
 
 The day opens with two rings: outer for strength, inner for cardio, each closing
-as the day fills them. Beside them, what is still owed in the app's own units
-and in something you can act on — "6.3 sets to go · about 3 more", "86 MET-min
-to go · about 14 min".
+as the day fills them. Beside them, what is still owed — "2.4 sets to go",
+"86 MET-min to go · about 14 min".
 
-Each target is **a seventh of that side's weekly guideline**, so ~8.6 effective
-sets and ~86 MET-minutes a day, derived from the same constants the balance
-marker and the calendar use. Steps count toward cardio on the same terms the
-balance marker uses.
+Each target is **a seventh of that side's weekly guideline**, so ~3.9 hard sets
+and ~86 MET-minutes a day, derived from the same constants the balance marker
+and the calendar use. Steps count toward cardio on the same terms the balance
+marker uses.
+
+The strength side counts **hard sets** — one set counts once however many
+muscles the movement trains. Effective sets fan out across those muscles, which
+is right for the body map and the radar and wrong for a single daily number: it
+closed the ring four times faster on deadlifts than on triceps extensions. See
+[ADR 0016](./docs/adr/0016-the-scalar-dose-is-hard-sets.md).
 
 **Nothing carries over.** A huge Tuesday does not buy Wednesday off, and an
 empty Monday does not make Tuesday owe double — a target that moves for reasons

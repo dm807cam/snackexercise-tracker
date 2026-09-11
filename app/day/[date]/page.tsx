@@ -76,6 +76,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         metMinutes: summary.metMinutes,
         stepMetMinutes: summary.stepMetMinutes,
         effectiveSets: summary.effectiveSets,
+        hardSets: summary.hardSets,
         spacing: summary.spacing,
       }}
       exercises={exercises}

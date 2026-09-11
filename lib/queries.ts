@@ -26,6 +26,7 @@ import {
   entryEffectiveSets,
   muscleCardioLoad,
   totalEffectiveSets,
+  totalHardSets,
 } from "./scoring";
 import {
   DEFAULT_STEP_BASELINE,
@@ -113,8 +114,14 @@ export async function getDaySummary(
    * whether a 14,000-step day was cardio.
    */
   stepMetMinutes: number;
-  /** Effective sets across every muscle — the day's whole resistance dose. */
+  /** Effective sets across every muscle — the drawing scale, summed. */
   effectiveSets: number;
+  /**
+   * The day's resistance DOSE, in hard sets: normalised for how many muscles
+   * each movement fans out across, so the ring does not close four times faster
+   * on deadlifts than on triceps extensions. See lib/scoring.ts.
+   */
+  hardSets: number;
   spacing: SpacingResult;
 }> {
   const [entries, steps, activeWindow, stepSettings] = await Promise.all([
@@ -136,6 +143,7 @@ export async function getDaySummary(
       stepMetMinutes(steps, stepSettings, impliedStepsFromEntries(entries)),
     ),
     effectiveSets: round(totalEffectiveSets(summary.muscles)),
+    hardSets: round(totalHardSets(entries)),
     spacing: daySpacing(
       entries.map((e) => minutesOfDayInZone(e.performedAt, timeZone)),
       activeWindow,

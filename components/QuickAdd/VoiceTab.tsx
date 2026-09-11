@@ -340,6 +340,38 @@ function ProposalCard({
         </div>
       )}
 
+      {/*
+        The rating the model inferred, shown and correctable.
+        "Nothing is stored until you confirm" has to mean every field: an effort
+        rating changes what the set is worth, and one heard out of "that was easy
+        to get to" would otherwise be saved with no way to see or undo it here.
+        Not offered for cardio, which is never rated.
+      */}
+      {!proposal.isCardio && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {EFFORT_LEVELS.map((level) => {
+            const active = proposal.effort === level;
+            return (
+              <button
+                key={level}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onChange({ effort: active ? null : level })}
+                className="tap rounded-full px-2.5 py-1 text-xs font-medium"
+                style={{
+                  background: active ? "var(--accent)" : "var(--surface-2)",
+                  color: active ? "var(--accent-contrast)" : "var(--text-dim)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {effortLabel(level)}
+              </button>
+            );
+          })}
+          {proposal.effort == null && <span className="text-xs text-dim">effort not stated</span>}
+        </div>
+      )}
+
       {proposal.distanceM != null && proposal.distanceM > 0 ? (
         <p className="mt-2 text-xs text-dim">
           {formatDistance(proposal.distanceM, units)}

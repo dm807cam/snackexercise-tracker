@@ -3,12 +3,15 @@ import {
   buildStats,
   emptyMuscleTotals,
   entryEffectiveSets,
+  entryHardSets,
   muscleEffectiveSets,
+  muscleWeightSum,
   perWeek,
   rollUpToAxes,
   shadeIntensity,
   summariseDay,
   totalEffectiveSets,
+  totalHardSets,
   totalReps,
   totalSets,
   totalTonnage,
@@ -55,6 +58,74 @@ function entry(overrides: Partial<ScoredEntry> & { muscles: [string, number][] }
     },
   };
 }
+
+describe("the scalar dose, normalised", () => {
+  /** Deadlift-shaped: six muscles summing to 4.25. */
+  const compound = () =>
+    entry({
+      sets: 2,
+      muscles: [
+        ["hamstrings", 1],
+        ["glutes", 1],
+        ["lower-back", 1],
+        ["traps", 0.5],
+        ["forearms", 0.5],
+        ["lats", 0.25],
+      ],
+    });
+
+  /** Triceps-extension-shaped: one muscle at 1.0. */
+  const isolation = () => entry({ sets: 2, muscles: [["triceps", 1]] });
+
+  it("sums a movement's muscle weights", () => {
+    expect(muscleWeightSum(compound().exercise)).toBeCloseTo(4.25, 10);
+    expect(muscleWeightSum(isolation().exercise)).toBe(1);
+  });
+
+  it("scores two sets as two sets, whatever the movement fans out across", () => {
+    expect(entryHardSets(compound())).toBe(2);
+    expect(entryHardSets(isolation())).toBe(2);
+  });
+
+  it("is exactly the effective sets divided back by the fan-out", () => {
+    for (const e of [compound(), isolation()]) {
+      expect(entryHardSets(e) * muscleWeightSum(e.exercise)).toBeCloseTo(
+        entryEffectiveSets(e),
+        10,
+      );
+    }
+  });
+
+  it("leaves the per-muscle vector alone, where the fan-out is correct", () => {
+    // A deadlift really does train six muscles; only collapsing that into one
+    // number made it four and a quarter times the dose of a curl.
+    expect(entryEffectiveSets(compound())).toBeCloseTo(8.5, 10);
+    expect(entryEffectiveSets(isolation())).toBe(2);
+  });
+
+  it("carries the same effort and cardio scaling as the vector does", () => {
+    expect(entryHardSets(entry({ sets: 2, effort: "easy", muscles: [["triceps", 1]] }))).toBeCloseTo(
+      2 * effortMultiplier("easy"),
+      10,
+    );
+    const swing = entry({
+      sets: 10,
+      exercise: { id: "x1", name: "Swing", cardioBias: 0.4, muscles: [] },
+      muscles: [["glutes", 1], ["hamstrings", 1]],
+    });
+    expect(entryHardSets(swing)).toBeCloseTo(6, 10);
+  });
+
+  it("credits nothing for a movement that maps no muscle at all", () => {
+    // It contributes no effective sets either, so a dose would be credit for
+    // work the app cannot place anywhere.
+    expect(entryHardSets(entry({ sets: 3, muscles: [] }))).toBe(0);
+  });
+
+  it("totals across entries", () => {
+    expect(totalHardSets([compound(), isolation()])).toBe(4);
+  });
+});
 
 describe("effort scaling", () => {
   it("discounts a set the user rated as easy", () => {

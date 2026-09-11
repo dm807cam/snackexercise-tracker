@@ -1,12 +1,7 @@
 "use client";
 
 import { formatSets } from "@/lib/format";
-import {
-  goalHeadline,
-  remainingCardioMinutes,
-  remainingHardSets,
-  type DailyGoal,
-} from "@/lib/daily-goal";
+import { goalHeadline, remainingCardioMinutes, type DailyGoal } from "@/lib/daily-goal";
 
 /**
  * What is still left of today, drawn as two closing rings.
@@ -26,7 +21,6 @@ import {
  * copy does not imply it is; the app has no streak to break.
  */
 export function TodayGoal({ goal }: { goal: DailyGoal }) {
-  const sets = remainingHardSets(goal);
   const minutes = remainingCardioMinutes(goal);
 
   return (
@@ -46,8 +40,18 @@ export function TodayGoal({ goal }: { goal: DailyGoal }) {
                 ? `${formatSets(goal.strength.done)} of ${formatSets(goal.strength.target)} sets`
                 : `${formatSets(goal.strength.remaining)} sets to go`
             }
-            hint={goal.strength.met ? null : sets > 0 ? `about ${sets} more` : "almost there"}
+            // No translation line: the strength target is counted in hard sets,
+            // so the remainder is already the thing to go and do. It used to
+            // divide by an assumed 2.2 effective sets per set, which was wrong
+            // by a factor of two in both directions depending on the movement.
+            hint={null}
           />
+          {/* Both remainders are shown to a tenth rather than rounded to a whole
+              number. `met` is decided on the rounded-to-a-tenth remainder, so a
+              day 0.4 MET-min short is genuinely not met — and printing it as a
+              whole number put "0 MET-min to go" beside an unticked label and an
+              open ring, which is the exact contradiction side()'s rounding rule
+              exists to prevent. */}
           <Row
             colour="var(--cardio)"
             label="Cardio"
@@ -55,7 +59,7 @@ export function TodayGoal({ goal }: { goal: DailyGoal }) {
             value={
               goal.cardio.met
                 ? `${Math.round(goal.cardio.done)} of ${Math.round(goal.cardio.target)} MET-min`
-                : `${Math.round(goal.cardio.remaining)} MET-min to go`
+                : `${formatSets(goal.cardio.remaining)} MET-min to go`
             }
             hint={
               goal.cardio.met ? null : minutes > 0 ? `about ${minutes} min` : "almost there"
@@ -168,9 +172,9 @@ function Row({
 function describe(goal: DailyGoal): string {
   const strength = goal.strength.met
     ? "strength target met"
-    : `${formatSets(goal.strength.remaining)} effective sets still to go`;
+    : `${formatSets(goal.strength.remaining)} sets still to go`;
   const cardio = goal.cardio.met
     ? "cardio target met"
-    : `${Math.round(goal.cardio.remaining)} MET-minutes still to go`;
+    : `${formatSets(goal.cardio.remaining)} MET-minutes still to go`;
   return `Today's targets: ${strength}; ${cardio}.`;
 }

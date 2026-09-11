@@ -8,10 +8,18 @@
  * effective sets is not an amount anyone can act on before bedtime.
  *
  * THE DAILY SHARE. Each side's target is a seventh of its own weekly guideline:
- * 60 effective sets and 600 MET-minutes become ~8.6 sets and ~86 MET-minutes a
- * day. Derived from those constants rather than written out, so the day view,
- * the balance marker, the calendar and the radar cannot drift apart about what
- * "on target" means.
+ * ~27 hard sets and 600 MET-minutes become ~3.9 sets and ~86 MET-minutes a day.
+ * Derived from those constants rather than written out, so the day view, the
+ * balance marker, the calendar and the radar cannot drift apart about what "on
+ * target" means.
+ *
+ * HARD SETS, NOT EFFECTIVE SETS. Effective sets fan out across every muscle a
+ * movement trains, so summing them into one number made the ring close four
+ * times faster on deadlifts than on triceps extensions at identical effort.
+ * The per-muscle vector is still the right measure for the body map and the
+ * radar; a single scalar dose is not, so this side counts hard sets. It also
+ * means the target no longer moves when the muscle weightings are edited in
+ * Settings.
  *
  * An even seventh is the right split *for this app specifically*. Spreading a
  * strength guideline evenly across seven days would be odd advice for someone
@@ -29,12 +37,12 @@
  */
 
 import { CARDIO_TARGET_MET_MIN_PER_WEEK, FALLBACK_METS } from "./cardio";
-import { STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK } from "./balance";
+import { STRENGTH_TARGET_HARD_SETS_PER_WEEK } from "./balance";
 
 export const DAYS_PER_WEEK = 7;
 
-/** Effective sets that count as a full day of resistance work. */
-export const STRENGTH_TARGET_PER_DAY = STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK / DAYS_PER_WEEK;
+/** Hard sets that count as a full day of resistance work. */
+export const STRENGTH_TARGET_PER_DAY = STRENGTH_TARGET_HARD_SETS_PER_WEEK / DAYS_PER_WEEK;
 
 /** MET-minutes that count as a full day of aerobic work. */
 export const CARDIO_TARGET_MET_MIN_PER_DAY = CARDIO_TARGET_MET_MIN_PER_WEEK / DAYS_PER_WEEK;
@@ -67,8 +75,12 @@ export interface DailyGoal {
 }
 
 export function buildDailyGoal(input: {
-  /** Today's effective sets, already scaled by (1 - cardioBias) upstream. */
-  effectiveSets: number;
+  /**
+   * Today's hard sets — sets scaled by how aerobic the movement is and how
+   * close to failure they were, but NOT by how many muscles each one fans out
+   * across. See lib/scoring.ts's `entryHardSets`.
+   */
+  hardSets: number;
   /** Today's MET-minutes from logged entries. */
   metMinutes: number;
   /**
@@ -80,7 +92,7 @@ export function buildDailyGoal(input: {
    */
   stepMetMinutes?: number;
 }): DailyGoal {
-  const strength = side(input.effectiveSets, STRENGTH_TARGET_PER_DAY);
+  const strength = side(input.hardSets, STRENGTH_TARGET_PER_DAY);
   const cardio = side(
     input.metMinutes + (input.stepMetMinutes ?? 0),
     CARDIO_TARGET_MET_MIN_PER_DAY,
@@ -117,27 +129,15 @@ function side(doneRaw: number, target: number): GoalSide {
 }
 
 /**
- * Effective sets one hard set of a compound movement generates.
+ * Minutes of ordinary vigorous effort that would close the cardio gap.
  *
- * Not a new assumption: it is the figure STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK
- * is itself calibrated against (a set credits 1.0 / 0.5 / 0.25 across the
- * muscles it trains). Named here because "3.4 effective sets to go" is a unit
- * nobody can act on at the top of the stairs, and "about 2 sets" is.
+ * The strength side no longer needs a companion to this. It used to divide the
+ * remainder by an assumed 2.2 effective sets per hard set to turn it into
+ * something actionable, which was right on average and wrong by a factor of two
+ * in both directions for real movements — "about 3 more sets" after a deadlift
+ * session meant about 1, and after arm work about 6. Now that the target is
+ * itself in hard sets, the remainder already is the answer.
  */
-export const EFFECTIVE_SETS_PER_HARD_SET = 2.2;
-
-/**
- * What is left, in something a person can actually go and do.
- *
- * Both are rough on purpose and the UI says "about". The point is to turn a
- * quantity into an action, not to add a third measurement — the honest units
- * stay next to them.
- */
-export function remainingHardSets(goal: DailyGoal): number {
-  return Math.max(0, Math.round(goal.strength.remaining / EFFECTIVE_SETS_PER_HARD_SET));
-}
-
-/** Minutes of ordinary vigorous effort that would close the cardio gap. */
 export function remainingCardioMinutes(goal: DailyGoal): number {
   return Math.max(0, Math.round(goal.cardio.remaining / FALLBACK_METS));
 }

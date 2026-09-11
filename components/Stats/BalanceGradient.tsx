@@ -1,6 +1,8 @@
 "use client";
 
 import { formatSets } from "@/lib/format";
+import { STRENGTH_TARGET_HARD_SETS_PER_WEEK } from "@/lib/balance";
+import { CARDIO_TARGET_MET_MIN_PER_WEEK } from "@/lib/cardio";
 
 export interface BalancePayload {
   cardioShare: number;
@@ -9,6 +11,8 @@ export interface BalancePayload {
   strengthDose: number;
   cardioDose: number;
   detail: {
+    hardSets: number;
+    hardSetsPerWeek: number;
     effectiveSets: number;
     effectiveSetsPerWeek: number;
     metMinutes: number;
@@ -21,8 +25,12 @@ export interface BalancePayload {
   windowDays: number;
 }
 
-const STRENGTH_TARGET = 60;
-const CARDIO_TARGET = 600;
+// Imported rather than restated: these are the numbers the marker is actually
+// placed on, and a second copy here would drift the moment either moves. The
+// strength one is rounded for the prose only — the bar divides by the exact
+// value, so what is drawn and what is claimed cannot disagree by a rounding.
+const STRENGTH_TARGET_SHOWN = Math.round(STRENGTH_TARGET_HARD_SETS_PER_WEEK);
+const CARDIO_TARGET = CARDIO_TARGET_MET_MIN_PER_WEEK;
 
 /**
  * Where this window's training sits between strength and cardio.
@@ -128,8 +136,8 @@ export function BalanceGradient({ balance }: { balance: BalancePayload }) {
         <DoseRow
           label="Strength"
           color="var(--strength)"
-          value={`${formatSets(balance.detail.effectiveSetsPerWeek)} eff. sets/wk`}
-          fraction={balance.detail.effectiveSetsPerWeek / STRENGTH_TARGET}
+          value={`${formatSets(balance.detail.hardSetsPerWeek)} hard sets/wk`}
+          fraction={balance.detail.hardSetsPerWeek / STRENGTH_TARGET_HARD_SETS_PER_WEEK}
         />
         <DoseRow
           label="Cardio"
@@ -146,9 +154,11 @@ export function BalanceGradient({ balance }: { balance: BalancePayload }) {
       </dl>
 
       <p className="mt-2 text-[11px] leading-snug text-dim">
-        Each side is measured against its own weekly target — {STRENGTH_TARGET} effective sets and{" "}
+        Each side is measured against its own weekly target — about {STRENGTH_TARGET_SHOWN} hard sets
+        and{" "}
         {CARDIO_TARGET} MET-minutes — so the middle means on target for both, not that the numbers
-        happened to tie.
+        happened to tie. A set counts once here however many muscles it trains, so a month of
+        deadlifts and a month of curls are the same size.
       </p>
     </section>
   );

@@ -22,25 +22,50 @@ import {
   type StepSettings,
 } from "./cardio";
 import type { LocalDate } from "./dates";
-import { entryEffectiveSets } from "./scoring";
+import { entryEffectiveSets, entryHardSets } from "./scoring";
 
 /**
- * Effective sets per week that count as meeting the strength guideline.
+ * The reference point of the EFFECTIVE-SET SCALE — the per-muscle-summed
+ * quantity the radar, the body map and the calendar are drawn against.
  *
- * Calibrated to this app's own weighting convention, not lifted from a paper:
- * because a set credits 1.0 / 0.5 / 0.25 across the muscles it trains, one hard
- * set generates roughly 2.2 effective sets, so 60 here is about 27 hard sets a
- * week. That is consistent with the WHO's "muscle-strengthening on 2 or more
- * days" and with the hypertrophy literature's ~10 sets per muscle group per
- * week. If the muscle weightings are ever edited in Settings this number drifts
- * with them — it is a property of the scale, not a literature value.
- *
- * The calibration assumes a logged set is a hard set, which is exactly what an
- * unrated set is now counted as (lib/effort.ts), so this number still means
- * what it did. Rating sets as `easy` lowers the dose against an unchanged
- * target, which is the point of rating them.
+ * Not a dose target. Because a set credits 1.0 / 0.5 / 0.25 across the muscles
+ * it trains, the number of effective sets a single hard set generates depends
+ * entirely on which movement it was: 1.0 for a triceps extension, 4.25 for a
+ * deadlift. Summed into one number that fan-out is an artefact of movement
+ * selection, so the dose is measured in hard sets — see
+ * STRENGTH_TARGET_HARD_SETS_PER_WEEK below — and this constant survives only to
+ * say how far out a line should be drawn.
  */
 export const STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK = 60;
+
+/**
+ * Effective sets one hard set generates, averaged across the catalogue.
+ *
+ * A property of the DRAWING SCALE and of nothing else. It is close to the
+ * catalogue's mean fan-out (~2.0 over the 73 non-pure-cardio movements) but is
+ * deliberately a fixed number rather than one computed from the catalogue: the
+ * muscle weightings are editable in Settings, and a scale that moved whenever
+ * someone adjusted a row would silently restate every past week.
+ */
+export const EFFECTIVE_SETS_PER_HARD_SET = 2.2;
+
+/**
+ * HARD SETS per week that count as meeting the strength guideline — the actual
+ * strength dose target, and the number the ring, the marker and the day view
+ * are all measured against.
+ *
+ * ~27 a week. Consistent with the WHO's "muscle-strengthening on 2 or more
+ * days" and with the hypertrophy literature's ~10 sets per muscle group per
+ * week across the major groups. Derived from the drawing scale above so the two
+ * cannot drift, but unlike the old effective-set target it does not move when
+ * the muscle weightings are edited, because hard sets do not depend on them.
+ *
+ * It assumes a logged set is a hard set, which is exactly what an unrated set
+ * is counted as (lib/effort.ts). Rating sets as `easy` lowers the dose against
+ * an unchanged target, which is the point of rating them.
+ */
+export const STRENGTH_TARGET_HARD_SETS_PER_WEEK =
+  STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK / EFFECTIVE_SETS_PER_HARD_SET;
 
 /**
  * Prior strength, in guideline-weeks of imaginary dose. Half a week, split
@@ -101,6 +126,14 @@ export interface BalanceResult {
   cardioDose: number;
   /** Raw numbers behind the doses, for the breakdown under the gradient. */
   detail: {
+    /**
+     * The dose, in hard sets — normalised for how many muscles each movement
+     * fans out across, so a deadlift session and a curl session of the same
+     * size read as the same size.
+     */
+    hardSets: number;
+    hardSetsPerWeek: number;
+    /** The same work on the drawing scale — what the radar's spokes sum to. */
     effectiveSets: number;
     effectiveSetsPerWeek: number;
     metMinutes: number;
@@ -133,9 +166,11 @@ export function buildBalance(params: {
   const { windowDays, entries, stepsByDate, stepSettings } = params;
   const weeks = windowDays > 0 ? windowDays / 7 : 1;
 
+  let hardSets = 0;
   let effectiveSets = 0;
   let entryMetMin = 0;
   for (const entry of entries) {
+    hardSets += entryHardSets(entry);
     effectiveSets += entryEffectiveSets(entry);
     entryMetMin += entryMetMinutes(entry);
   }
@@ -167,7 +202,7 @@ export function buildBalance(params: {
   // Window totals in guideline-weeks, deliberately not per-week rates: a
   // 180-day window at the same weekly pace as a 7-day one *should* be more
   // certain, and normalising to a rate would throw that information away.
-  const strengthDose = effectiveSets / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK;
+  const strengthDose = hardSets / STRENGTH_TARGET_HARD_SETS_PER_WEEK;
   const cardioDose = metMinutes / CARDIO_TARGET_MET_MIN_PER_WEEK;
 
   const { cardioShare, uncertainty } = balanceFrom(strengthDose, cardioDose);
@@ -179,6 +214,11 @@ export function buildBalance(params: {
     strengthDose: round(strengthDose),
     cardioDose: round(cardioDose),
     detail: {
+      hardSets: round(hardSets),
+      hardSetsPerWeek: round(hardSets / weeks),
+      // Both are real sums over the same entries, not one converted into the
+      // other: the dose above is what the marker is placed on, and this is the
+      // figure the radar's spokes actually add up to.
       effectiveSets: round(effectiveSets),
       effectiveSetsPerWeek: round(effectiveSets / weeks),
       metMinutes: Math.round(metMinutes),
