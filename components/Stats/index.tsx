@@ -55,6 +55,15 @@ export interface StatsPayload {
   spacing: SpacingPayload;
 }
 
+/**
+ * The displayed percentage, which is also what the line's own visibility is
+ * decided on. Rounding in one place and gating on the raw fraction in another
+ * let the line render "80% rated" while claiming to disappear at 80%.
+ */
+function ratedPercent(fraction: number): number {
+  return Math.round(fraction * 100);
+}
+
 export function StatsView({ initial }: { initial: StatsPayload }) {
   const [windowDays, setWindowDays] = useState(initial.windowDays);
   const [stats, setStats] = useState(initial);
@@ -174,11 +183,11 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           actually rated is what keeps that honest. Once most sets carry a
           rating the line stops being worth the space, so it goes away.
         */}
-        {stats.totals.effort.unlabelled > 0 && stats.totals.effort.labelledFraction < 0.8 && (
+        {stats.totals.effort.unlabelled > 0 && ratedPercent(stats.totals.effort.labelledFraction) < 80 && (
           <p className="mt-2 text-xs text-dim">
             {stats.totals.effort.labelled === 0
               ? "No sets rated for effort — all of them count as hard sets. Tap Effort when you log one and the volume above starts reflecting how close to failure you actually went."
-              : `${Math.round(stats.totals.effort.labelledFraction * 100)}% of sets rated for effort; the rest count as hard sets.`}
+              : `${ratedPercent(stats.totals.effort.labelledFraction)}% of sets rated for effort; the rest count as hard sets.`}
           </p>
         )}
 

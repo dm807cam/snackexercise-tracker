@@ -117,7 +117,10 @@ export function ManualForm({
           : Math.round(toMetres(distanceValue, units)),
       avgHeartRate:
         heartRateValue == null || Number.isNaN(heartRateValue) ? null : Math.round(heartRateValue),
-      effort,
+      // Cleared rather than carried when the chips are not on screen: picking
+      // Push-up, tapping Hard and then switching to Run would otherwise file a
+      // proximity-to-failure rating against a 5 km run.
+      effort: isPureCardio ? null : effort,
       notes: notes.trim() === "" ? null : notes.trim(),
       // The same pattern the server validates against. A looser one here turns
       // a browser that falls back to a text input, and a typo like 25:00, into

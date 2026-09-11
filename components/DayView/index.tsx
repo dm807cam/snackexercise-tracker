@@ -128,6 +128,7 @@ export function DayView({
                   durationSec: entry.durationSec,
                   distanceM: entry.distanceM,
                   avgHeartRate: entry.avgHeartRate,
+                  effort: isEffort(entry.effort) ? entry.effort : null,
                   notes: entry.notes,
                   source: entry.source === "llm" ? "llm" : "manual",
                 }),

@@ -67,11 +67,6 @@ export function effortMultiplier(effort: string | null | undefined): number {
   return isEffort(effort) ? MULTIPLIER[effort] : UNLABELLED_EFFORT_MULTIPLIER;
 }
 
-/** Counts as a hard set in the literature's sense — near enough to failure. */
-export function isHardSet(effort: string | null | undefined): boolean {
-  return effort === "hard" || effort === "failure";
-}
-
 export function effortLabel(effort: string | null | undefined): string {
   if (effort === "easy") return "Easy";
   if (effort === "hard") return "Hard";
@@ -81,7 +76,7 @@ export function effortLabel(effort: string | null | undefined): string {
 
 /** The one-line explanation each chip carries, in reps-in-reserve terms. */
 export function effortHint(effort: Effort): string {
-  if (effort === "easy") return "Could have done 5 or more more";
+  if (effort === "easy") return "Could have done 5 more reps or so";
   if (effort === "hard") return "2 or 3 left in the tank";
   return "The next rep was not happening";
 }

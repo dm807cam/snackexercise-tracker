@@ -7,7 +7,6 @@ import {
   effortLabel,
   effortMultiplier,
   isEffort,
-  isHardSet,
 } from "@/lib/effort";
 
 describe("isEffort", () => {
@@ -45,16 +44,6 @@ describe("effortMultiplier", () => {
   });
 });
 
-describe("isHardSet", () => {
-  it("is true for hard and failure only", () => {
-    expect(isHardSet("hard")).toBe(true);
-    expect(isHardSet("failure")).toBe(true);
-    expect(isHardSet("easy")).toBe(false);
-    // Unrated is counted as hard for volume, but it is not *known* to be one.
-    expect(isHardSet(null)).toBe(false);
-  });
-});
-
 describe("labels", () => {
   it("names every level, and says plainly when there is nothing to name", () => {
     expect(effortLabel("easy")).toBe("Easy");
@@ -63,8 +52,15 @@ describe("labels", () => {
     expect(effortLabel(null)).toBe("Not recorded");
   });
 
-  it("explains each level in reps-in-reserve terms", () => {
-    for (const level of EFFORT_LEVELS) expect(effortHint(level).length).toBeGreaterThan(0);
+  it("explains each level in reps-in-reserve terms, as a readable sentence", () => {
+    for (const level of EFFORT_LEVELS) {
+      const hint = effortHint(level);
+      expect(hint.length).toBeGreaterThan(0);
+      // These are rendered verbatim as the chip tooltip and the helper line, so
+      // a duplicated word ships straight to the user.
+      const words = hint.toLowerCase().split(/\s+/);
+      expect(words.some((word, i) => word === words[i + 1])).toBe(false);
+    }
   });
 });
 

@@ -12,6 +12,7 @@ import {
   toMetres,
   type Units,
 } from "@/lib/format";
+import { EFFORT_LEVELS, effortLabel } from "@/lib/effort";
 import { muscleLabel } from "@/lib/muscles";
 import { resolvePerformedAt } from "@/lib/parse-helpers";
 import type { LocalDate } from "@/lib/dates";

@@ -340,3 +340,49 @@ test.describe("stating when, one half at a time", () => {
     }
   });
 });
+
+/**
+ * Effort is the one input that scales the app's central metric, and it travels
+ * through three places a unit test cannot reach at once: the chip in the log
+ * form, the shading the discounted volume produces, and the undo path — which
+ * restores an entry by POSTing it back and so has to carry the rating with it.
+ */
+test.describe("how hard it was", () => {
+  test("a set rated easy is worth less, and survives a delete and undo", async ({ page }) => {
+    // Start from a known day rather than from whatever earlier tests left
+    // behind, and hand it back empty at the end.
+    const today = new Date().toISOString().slice(0, 10);
+    await page.request.delete(`/api/days/${today}`);
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Log a snack" }).click();
+    await page.getByRole("tab", { name: "Manual" }).click();
+
+    await page.getByLabel("Exercise", { exact: true }).fill("Pull-up");
+    await page.getByRole("button", { name: "Pull-up", exact: true }).click();
+    await page.getByLabel("Sets", { exact: true }).fill("3");
+    await page.getByRole("button", { name: "Easy", exact: true }).click();
+    await page.getByRole("button", { name: "Log it" }).click();
+
+    const entry = page.getByRole("listitem").filter({ hasText: "Pull-up" });
+    await expect(entry).toBeVisible();
+    await expect(entry).toContainText("easy");
+
+    // Three sets of a lats movement rated easy: 3 x 1.0 x 0.4, not 3.
+    const upperBack = page.getByRole("button", { name: /Lats \/ Mid back/ });
+    await expect(upperBack).toHaveAttribute("aria-label", /1\.2 effective sets/);
+
+    // Undo has to restore the rating too. Without it the entry comes back
+    // unrated, which counts as a hard set — so deleting and undoing would
+    // silently multiply its volume by two and a half.
+    await entry.getByRole("button", { name: "Edit Pull-up" }).click();
+    await page.getByRole("button", { name: "Delete entry" }).click();
+    await page.getByRole("button", { name: "Undo" }).click();
+
+    const restored = page.getByRole("listitem").filter({ hasText: "Pull-up" });
+    await expect(restored).toContainText("easy");
+    await expect(upperBack).toHaveAttribute("aria-label", /1\.2 effective sets/);
+
+    await page.request.delete(`/api/days/${today}`);
+  });
+});
