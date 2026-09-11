@@ -96,6 +96,22 @@ side's target is the same distance, so at the default about 10 MET-minutes reach
 as far as one effective set. Raise the cardio target and that rate moves with
 it, which is the honest answer to "how much of my target was that run".
 
+### How hard, not just how much
+
+MET-minutes are intensity times duration collapsed into one product, so 150
+minutes of strolling and 37 minutes of hard running are the same number. They
+are not the same thing: at *matched* volume a higher vigorous proportion is
+associated with lower mortality, and 1–2 minute vigorous bouts — this app's own
+format — carry benefit of their own.
+
+Enter a **year of birth** in Settings and heart rates are read against your own
+predicted maximum (Tanaka) rather than a fixed 150 bpm, which is ~79% of a
+25-year-old's maximum and ~90% of a 60-year-old's. Add a **resting heart rate**
+and it uses heart-rate reserve instead. Leave both blank and nothing already
+logged changes. Entries are then classified light / moderate / vigorous on the
+ACSM bands, and vigorous minutes and bouts are reported beside the total — never
+added to it. See [ADR 0020](./docs/adr/0020-intensity-is-classified-on-the-users-own-scale.md).
+
 ### One colour, one quality
 
 **Blue is strength. Orange is cardio. Teal is timing.** Everywhere — the body

@@ -28,6 +28,7 @@ accident.
 | [0017](./0017-the-radar-is-read-against-an-absolute-target.md) | Volume is read against an absolute per-muscle target, not the user's best spoke | Accepted |
 | [0018](./0018-progression-is-a-per-movement-best-set.md) | Progression is a per-movement best set; a stall is weeks without one moving | Accepted |
 | [0019](./0019-targets-are-configurable-and-the-two-claims-are-separate.md) | The weekly targets are configurable, and the two claims are kept apart | Accepted, amends 0005 |
+| [0020](./0020-intensity-is-classified-on-the-users-own-scale.md) | Intensity is classified on the user's own scale, and reported beside volume | Accepted |
 
 ## Format
 

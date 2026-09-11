@@ -15,6 +15,7 @@
 
 import {
   entryMetMinutes,
+  type IntensityContext,
   impliedStepsFromEntries,
   stepMetMinutes,
   type CardioInput,
@@ -120,8 +121,20 @@ export function buildBalance(params: {
   stepSettings: StepSettings;
   /** The weekly doses each side is measured against. Defaults to the guideline. */
   targets?: TargetsInput;
+  /**
+   * Whose heart rate the MET figures are being read as. Optional: without it
+   * the fixed anchor applies, which is what the app did before it could ask.
+   */
+  intensityContext?: IntensityContext;
 }): BalanceResult {
-  const { windowDays, entries, stepsByDate, stepSettings, targets = DEFAULT_TARGETS } = params;
+  const {
+    windowDays,
+    entries,
+    stepsByDate,
+    stepSettings,
+    targets = DEFAULT_TARGETS,
+    intensityContext,
+  } = params;
   const weeks = windowDays > 0 ? windowDays / 7 : 1;
 
   let hardSets = 0;
@@ -130,7 +143,7 @@ export function buildBalance(params: {
   for (const entry of entries) {
     hardSets += entryHardSets(entry);
     effectiveSets += entryEffectiveSets(entry);
-    entryMetMin += entryMetMinutes(entry);
+    entryMetMin += entryMetMinutes(entry, intensityContext);
   }
 
   // De-duplicate steps against logged foot-based cardio day by day: the run

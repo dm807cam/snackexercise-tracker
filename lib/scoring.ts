@@ -37,6 +37,7 @@ import type { SpacingSummary } from "./spacing";
 import { effortBreakdown, effortMultiplier, type EffortBreakdown } from "./effort";
 import type { ExerciseProgress } from "./progression";
 import { GUIDELINE_TARGETS, type Targets } from "./targets";
+import { emptyIntensity, type IntensitySummary } from "./intensity";
 import {
   PER_MUSCLE_TARGET_SETS_PER_WEEK,
   UPPER_BAND_MULTIPLE,
@@ -324,6 +325,12 @@ export interface StatsResult {
   progress: ExerciseProgress[];
   /** The weekly doses this window was measured against. */
   targets: Targets;
+  /**
+   * How much of the window was HARD, kept apart from how much there was of it.
+   * MET-minutes collapse intensity and duration into one product, and the
+   * vigorous fraction carries benefit at matched volume. See lib/intensity.ts.
+   */
+  intensity: IntensitySummary;
 }
 
 /**
@@ -363,6 +370,8 @@ export function buildStats<T extends ScoredEntry>(params: {
   progress?: ExerciseProgress[];
   /** The weekly doses each side is measured against. */
   targets?: Targets;
+  /** The window's vigorous picture, summarised by the caller. */
+  intensity?: IntensitySummary;
 }): StatsResult {
   const {
     windowDays,
@@ -380,6 +389,7 @@ export function buildStats<T extends ScoredEntry>(params: {
     perMuscleTarget = PER_MUSCLE_TARGET_SETS_PER_WEEK,
     progress = [],
     targets = GUIDELINE_TARGETS,
+    intensity = emptyIntensity(),
   } = params;
 
   const currentAxes = rollUpToAxes(muscleEffectiveSets(current));
@@ -422,6 +432,7 @@ export function buildStats<T extends ScoredEntry>(params: {
     perMuscleTarget,
     progress,
     targets,
+    intensity,
   };
 }
 

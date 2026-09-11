@@ -166,4 +166,11 @@ export const settingsSchema = z.object({
    */
   cardioTarget: z.string().max(5).optional(),
   strengthTarget: z.string().max(4).optional(),
+  /**
+   * Two numbers, entered once, that let the app read a heart rate on the user's
+   * own scale instead of against a fixed 150 bpm. Empty leaves the old
+   * behaviour in place; see lib/intensity.ts.
+   */
+  birthYear: z.string().max(4).optional(),
+  restingHr: z.string().max(3).optional(),
 });

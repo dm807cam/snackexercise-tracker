@@ -21,6 +21,9 @@
  * alone.
  */
 
+import { personalHeartRateFactor, type Physiology } from "./intensity";
+import type { LocalDate } from "./dates";
+
 /** WHO's weekly aerobic target, expressed in MET-minutes. */
 export const CARDIO_TARGET_MET_MIN_PER_WEEK = 600;
 
@@ -34,6 +37,17 @@ export interface CardioInput {
   distanceM: number | null;
   avgHeartRate: number | null;
   exercise: { cardioBias: number; mets: number | null; slug?: string };
+}
+
+/**
+ * What the app knows about whose heart rate it is reading, and when "now" is.
+ *
+ * Optional throughout: every function that takes it works without it, on the
+ * fixed anchor, which is what the app did before anyone could enter an age.
+ */
+export interface IntensityContext {
+  physiology: Physiology;
+  today: LocalDate;
 }
 
 // --- METs from pace --------------------------------------------------------
@@ -139,14 +153,21 @@ export function metsFromPace(
 // --- METs from heart rate --------------------------------------------------
 
 /**
- * Scale a movement's nominal METs by how hard the heart was actually working.
+ * Scale a movement's nominal METs by how hard the heart was actually working,
+ * with no idea whose heart it is.
  *
- * %HRmax is used rather than heart-rate reserve because HRR needs a resting
- * heart rate the app does not have, and age-predicted HRmax (208 - 0.7 x age)
- * needs an age it also does not have. So this deliberately does not try to
- * compute an absolute intensity: it asks only "was this harder or easier than
- * the typical instance of this movement?", anchored on 150 bpm as typical and
- * clamped so a wrist-optical misread cannot triple a session's score.
+ * The fallback, kept for exactly one case: the user has not told the app their
+ * age. It cannot compute an absolute intensity, so it asks only "was this
+ * harder or easier than the typical instance of this movement?", anchored on
+ * 150 bpm as typical and clamped so a wrist-optical misread cannot triple a
+ * session's score.
+ *
+ * 150 bpm is a poor stand-in for "typical" — it is ~79% of a 25-year-old's
+ * predicted maximum and ~90% of a 60-year-old's, so the same reading means very
+ * different things and this returns 1.0 for both. `personalHeartRateFactor` in
+ * lib/intensity.ts replaces it as soon as there is a birth year to work with;
+ * this one stays so that entering an age IMPROVES the estimate rather than
+ * silently restating every heart rate logged before.
  */
 export function heartRateFactor(bpm: number): number {
   if (!Number.isFinite(bpm) || bpm <= 0) return 1;
@@ -198,11 +219,18 @@ export function effectiveDurationSec(input: {
  *   3. catalogue   — the movement's typical cost
  *   4. fallback    — 6 METs, generic vigorous effort
  */
-export function metsForEntry(input: CardioInput): number {
+export function metsForEntry(input: CardioInput, context?: IntensityContext): number {
   const base = input.exercise.mets ?? FALLBACK_METS;
 
   if (input.avgHeartRate != null && input.avgHeartRate > 0) {
-    return clamp(base * heartRateFactor(input.avgHeartRate), 1, 23);
+    // Read on the user's own scale when the app has one, and on the old fixed
+    // anchor when it does not — so entering an age improves the estimate rather
+    // than restating every heart rate already logged.
+    const personal = context
+      ? personalHeartRateFactor(input.avgHeartRate, context.physiology, context.today)
+      : null;
+    const factor = personal ?? heartRateFactor(input.avgHeartRate);
+    return clamp(base * factor, 1, 23);
   }
 
   const family = paceFamilyFor(input.exercise.slug);
@@ -219,10 +247,15 @@ export function metsForEntry(input: CardioInput): number {
  * aerobic the movement is. A kettlebell swing at bias 0.4 gives 40% of its
  * MET-minutes here and keeps 60% of its effective sets on the strength side.
  */
-export function entryMetMinutes(input: CardioInput): number {
+export function entryMetMinutes(input: CardioInput, context?: IntensityContext): number {
   const bias = clamp(input.exercise.cardioBias ?? 0, 0, 1);
   if (bias <= 0) return 0;
-  return (effectiveDurationSec(input) / 60) * metsForEntry(input) * bias;
+  return (effectiveDurationSec(input) / 60) * metsForEntry(input, context) * bias;
+}
+
+/** Minutes of work an entry represents, for the vigorous-minutes target. */
+export function entryMinutes(input: CardioInput): number {
+  return effectiveDurationSec(input) / 60;
 }
 
 // --- steps -----------------------------------------------------------------
