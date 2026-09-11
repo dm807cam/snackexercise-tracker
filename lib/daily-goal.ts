@@ -65,6 +65,22 @@ export function dailyTargets(targets: Targets = GUIDELINE_TARGETS) {
 export const CARDIO_GUIDELINE_FLOOR_PER_DAY =
   GUIDELINE_FLOOR_MET_MIN_PER_WEEK / DAYS_PER_WEEK;
 
+/**
+ * The most of a day's cardio ring that walking may fill.
+ *
+ * Half. Enough that a long walk is visibly worth something — which it is — and
+ * never enough to close the ring on its own, so the ring goes on meaning
+ * "training you did" rather than "distance you covered incidentally".
+ *
+ * Applied ONLY to the ring. The stats page's balance marker still counts every
+ * credited step, because its question ("is my training cardio or strength")
+ * genuinely wants the walking in it, at the discount the step weight applies.
+ * The two views are not disagreeing about the number; they are answering
+ * different questions, and the old code made them agree on the number while
+ * disagreeing about the question.
+ */
+export const MAX_STEP_SHARE_OF_CARDIO_RING = 0.5;
+
 export interface GoalSide {
   /** What today has actually earned, in that side's own unit. */
   done: number;
@@ -97,6 +113,12 @@ export interface DailyGoal {
    * target is the guideline, which is when there is nothing extra to mark.
    */
   cardioGuidelineFraction: number;
+  /**
+   * True when today's walking earned more than the ring will take from it.
+   * Said out loud rather than silently withheld — the credit is real, and the
+   * stats page does count all of it.
+   */
+  stepsCapped: boolean;
 }
 
 export function buildDailyGoal(input: {
@@ -110,10 +132,18 @@ export function buildDailyGoal(input: {
   metMinutes: number;
   /**
    * MET-minutes credited to today's step count, after the baseline and the
-   * de-duplication against logged foot-based cardio. Counted here because the
-   * balance marker counts it, and a day view that disagreed with the stats page
-   * about whether a 14,000-step day was cardio would be the app arguing with
-   * itself.
+   * de-duplication against logged foot-based cardio.
+   *
+   * CAPPED here, and nowhere else. The balance marker asks "is my training
+   * cardio or strength", and for that question walking is activity that should
+   * count at a discount — which is what the step weight already does. The ring
+   * asks a different question: "is there anything left in me that I owe
+   * today?". Answering "no" because the user walked to the shops is precisely
+   * the failure the discount existed to avoid, reintroduced one layer up.
+   *
+   * At the old flat 3.5 METs and the default half weight, about 9,400 steps
+   * closed the daily cardio ring on its own, with no cardio logged at all: the
+   * ring said "Cardio done — strength still open" for ordinary ambulation.
    */
   stepMetMinutes?: number;
   /** The weekly doses to take a seventh of. Defaults to the guideline. */
@@ -121,7 +151,12 @@ export function buildDailyGoal(input: {
 }): DailyGoal {
   const perDay = dailyTargets(input.targets);
 
-  const cardioDone = input.metMinutes + (input.stepMetMinutes ?? 0);
+  // Walking contributes, and cannot finish the job alone.
+  const stepCeiling = perDay.cardio * MAX_STEP_SHARE_OF_CARDIO_RING;
+  const stepCredit = Math.min(input.stepMetMinutes ?? 0, stepCeiling);
+  const stepsCapped = (input.stepMetMinutes ?? 0) > stepCeiling;
+
+  const cardioDone = input.metMinutes + stepCredit;
 
   const strength = side(input.hardSets, perDay.strength);
   const cardio = side(cardioDone, perDay.cardio);
@@ -142,6 +177,7 @@ export function buildDailyGoal(input: {
       perDay.cardio > 0
         ? Math.min(1, CARDIO_GUIDELINE_FLOOR_PER_DAY / perDay.cardio)
         : 1,
+    stepsCapped,
   };
 }
 

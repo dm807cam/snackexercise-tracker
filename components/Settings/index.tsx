@@ -47,6 +47,8 @@ export function SettingsView({
     stepsMode: StepsMode;
     stepBaseline: string;
     resolvedBaseline: number;
+    /** Steps that would fill half the daily cardio ring, at the current settings. */
+    stepsForHalfRing: number | null;
     dayStartHour: number;
     dayEndHour: number;
     perMuscleTarget: number;
@@ -290,7 +292,11 @@ export function SettingsView({
         <Field
           label="Step baseline"
           htmlFor="step-baseline"
-          hint={`Steps below this are ordinary living rather than training, so they earn no cardio credit. Leave it empty and the app uses the quiet quarter of your own days — currently ${initial.resolvedBaseline.toLocaleString()}.`}
+          hint={`Steps below this are ordinary living rather than training, so they earn no cardio credit. Leave it empty and the app uses the quiet quarter of your own days — currently ${initial.resolvedBaseline.toLocaleString()}.${
+            initial.stepsForHalfRing
+              ? ` At your current settings about ${initial.stepsForHalfRing.toLocaleString()} steps fills half a day's cardio ring, which is the most walking alone can fill.`
+              : ""
+          }`}
         >
           <input
             id="step-baseline"
@@ -306,6 +312,15 @@ export function SettingsView({
             className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
+        </Field>
+
+        <Field
+          label="Brisk minutes"
+          hint="Steps arriving as one daily number are mostly kitchen, corridor and shop, so they are credited as incidental walking. If your phone also reports active or brisk minutes — the Shortcut in the README can send them alongside the step count — those minutes are credited at the brisk rate instead. It is the only thing that lets the app tell 6,000 extra slow steps from 6,000 extra fast ones."
+        >
+          <p className="text-xs text-dim">
+            Sent by the phone automation, or typed on the day itself beside the step count.
+          </p>
         </Field>
 
         <Field

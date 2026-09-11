@@ -33,6 +33,7 @@ export interface DayViewData {
   reps: number;
   tonnageKg: number;
   steps: number | null;
+  activeMinutes: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
   stepMetMinutes: number;
@@ -259,8 +260,9 @@ export function DayView({
         <StepsField
           date={day.date}
           steps={day.steps}
-          onSaved={async (steps) => {
-            setDay((current) => ({ ...current, steps }));
+          activeMinutes={day.activeMinutes}
+          onSaved={async (steps, activeMinutes) => {
+            setDay((current) => ({ ...current, steps, activeMinutes }));
             router.refresh();
           }}
           onError={(message) => setToast({ message, tone: "error" })}

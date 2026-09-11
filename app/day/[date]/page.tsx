@@ -74,6 +74,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         reps: summary.reps,
         tonnageKg: summary.tonnageKg,
         steps: summary.steps,
+        activeMinutes: summary.activeMinutes,
         cardioMuscles: summary.cardioMuscles,
         metMinutes: summary.metMinutes,
         stepMetMinutes: summary.stepMetMinutes,

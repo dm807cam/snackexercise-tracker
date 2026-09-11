@@ -31,7 +31,7 @@ const NO_CARDIO = {
   balance: buildBalance({
     windowDays: 30,
     entries: [],
-    stepsByDate: {},
+    walkingByDate: {},
     stepSettings: { mode: "off" as const, baseline: 4000 },
   }),
   lastCardio: null,

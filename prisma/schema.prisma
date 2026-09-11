@@ -102,6 +102,11 @@ model SetEntry {
 model DailyMetric {
   localDate String @id
   steps     Int?
+  /// Minutes the phone counted as brisk or active, when it reports them.
+  /// The only thing that lets the app tell 6,000 extra slow steps from 6,000
+  /// extra brisk ones; without it every step above the baseline is credited at
+  /// the incidental rate. See lib/cardio.ts.
+  activeMinutes Int?
 
   /// "manual" | "shortcut" | "import" — worth knowing whether a number was
   /// typed or came from a phone automation.

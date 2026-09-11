@@ -85,7 +85,16 @@ logged to say anything honest.
 
 Under Settings you can turn step-counting off, or up to full weight, and set the
 baseline by hand instead of letting the app take the quiet quarter of your own
-days.
+days — which also names the thing that setting actually decides: how many steps
+fill half a day's cardio ring.
+
+**Walking never closes the cardio ring on its own.** It fills at most half of it,
+because the ring asks "is there anything left in me that I owe today?" and
+answering "no" because you walked to the shops is exactly what the step discount
+exists to avoid. The balance marker still counts every credited step — its
+question is different. Above-baseline steps are credited as *incidental* walking;
+if your phone also reports brisk or active minutes, those are credited at the
+brisk rate instead. See [ADR 0021](./docs/adr/0021-walking-cannot-close-the-cardio-ring.md).
 
 Cardio stays out of the effective-set total, but not out of sight. It travels as
 a second channel in the same per-muscle shape — an outline on the body map, its

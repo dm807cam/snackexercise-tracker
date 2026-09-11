@@ -268,12 +268,42 @@ export interface StepSettings {
   baseline: number;
 }
 
+/** A day's walking, as the phone reports it. */
+export interface DayWalking {
+  steps: number | null | undefined;
+  /**
+   * Minutes the phone counted as brisk or active, when it reports them.
+   *
+   * The only thing that lets the app tell 6,000 extra slow steps from 6,000
+   * extra brisk ones — which, under a single flat MET rate, scored identically.
+   */
+  activeMinutes?: number | null;
+}
+
 export const DEFAULT_STEP_BASELINE = 4000;
 export const MIN_STEP_BASELINE = 3000;
 /** Ordinary walking cadence, steps per minute. */
 export const STEP_CADENCE = 110;
-/** Walking above the baseline is moderate-intensity by definition (100+ spm). */
-export const STEP_METS = 3.5;
+
+/**
+ * Brisk walking — the Compendium's "moderate pace", and what the 100+ spm
+ * cadence threshold (Tudor-Locke et al. 2018) actually describes.
+ *
+ * Reserved for minutes the PHONE calls active. That threshold is about
+ * instantaneous cadence during a walking bout; it says nothing about a daily
+ * step total, and crediting a whole day's surplus at this rate assumed the
+ * surplus was all purposeful brisk walking.
+ */
+export const STEP_METS_BRISK = 3.5;
+
+/**
+ * Everything else above the baseline: kitchen, corridor, shop.
+ *
+ * The Compendium's slow-pace walking. Steps arriving as one daily number from
+ * a phone are overwhelmingly accumulated well under 100 spm, so this is the
+ * honest default and 3.5 is what a day EARNS by reporting active minutes.
+ */
+export const STEP_METS_INCIDENTAL = 2.8;
 
 export function stepWeightFor(mode: StepsMode): number {
   return mode === "off" ? 0 : mode === "half" ? 0.5 : 1;
@@ -353,6 +383,8 @@ export function stepMetMinutes(
   steps: number | null | undefined,
   settings: StepSettings,
   alreadyLoggedSteps = 0,
+  /** Minutes the phone called active, when it reports them. */
+  activeMinutes?: number | null,
 ): number {
   if (steps == null || !Number.isFinite(steps) || steps <= 0) return 0;
 
@@ -360,7 +392,36 @@ export function stepMetMinutes(
   if (weight <= 0) return 0;
 
   const credited = Math.max(0, steps - settings.baseline - alreadyLoggedSteps);
-  return (credited / STEP_CADENCE) * STEP_METS * weight;
+  if (credited <= 0) return 0;
+
+  const creditedMinutes = credited / STEP_CADENCE;
+
+  // Brisk minutes are the ones the phone actually observed at pace; the rest
+  // is incidental ambulation. Capped at the credited minutes so a day whose
+  // active minutes exceed its surplus steps cannot earn more than it walked.
+  const brisk =
+    activeMinutes != null && Number.isFinite(activeMinutes) && activeMinutes > 0
+      ? Math.min(creditedMinutes, activeMinutes)
+      : 0;
+  const incidental = creditedMinutes - brisk;
+
+  return (brisk * STEP_METS_BRISK + incidental * STEP_METS_INCIDENTAL) * weight;
+}
+
+/**
+ * Steps that would supply a given number of MET-minutes, at the incidental
+ * rate and above the baseline.
+ *
+ * Exists so Settings can state the thing the "half weight" control actually
+ * controls. "Half weight" does not communicate "about 12,000 steps closes half
+ * your cardio ring" to anyone, and that is the fact the setting decides.
+ */
+export function stepsForMetMinutes(metMinutes: number, settings: StepSettings): number | null {
+  const weight = stepWeightFor(settings.mode);
+  if (weight <= 0 || metMinutes <= 0) return null;
+
+  const steps = (metMinutes / (STEP_METS_INCIDENTAL * weight)) * STEP_CADENCE;
+  return Math.round(settings.baseline + steps);
 }
 
 function clamp(value: number, min: number, max: number): number {

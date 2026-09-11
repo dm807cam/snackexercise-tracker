@@ -14,6 +14,7 @@
  */
 
 import {
+  type DayWalking,
   entryMetMinutes,
   type IntensityContext,
   impliedStepsFromEntries,
@@ -116,8 +117,12 @@ const CONFIDENCE_FLOOR = 0.3;
 export function buildBalance(params: {
   windowDays: number;
   entries: readonly BalanceEntry[];
-  /** Step counts for the days in the window, keyed by local date. */
-  stepsByDate: Readonly<Record<string, number | null | undefined>>;
+  /**
+   * Each day's walking, keyed by local date — the count and the brisk minutes
+   * the phone reported, which decide how much of the surplus is credited at
+   * the brisk rate rather than the incidental one.
+   */
+  walkingByDate: Readonly<Record<string, DayWalking>>;
   stepSettings: StepSettings;
   /** The weekly doses each side is measured against. Defaults to the guideline. */
   targets?: TargetsInput;
@@ -130,7 +135,7 @@ export function buildBalance(params: {
   const {
     windowDays,
     entries,
-    stepsByDate,
+    walkingByDate,
     stepSettings,
     targets = DEFAULT_TARGETS,
     intensityContext,
@@ -159,12 +164,13 @@ export function buildBalance(params: {
   let stepMetMin = 0;
   let creditedSteps = 0;
   let totalSteps = 0;
-  for (const [date, steps] of Object.entries(stepsByDate)) {
+  for (const [date, walking] of Object.entries(walkingByDate)) {
+    const steps = walking?.steps;
     if (steps == null || steps <= 0) continue;
     totalSteps += steps;
 
     const implied = impliedStepsFromEntries(entriesByDate.get(date) ?? []);
-    stepMetMin += stepMetMinutes(steps, stepSettings, implied);
+    stepMetMin += stepMetMinutes(steps, stepSettings, implied, walking.activeMinutes);
     creditedSteps += Math.max(0, steps - stepSettings.baseline - implied);
   }
 

@@ -62,7 +62,16 @@ export function TodayGoal({ goal }: { goal: DailyGoal }) {
                 : `${formatSets(goal.cardio.remaining)} MET-min to go`
             }
             hint={
-              goal.cardio.met ? null : minutes > 0 ? `about ${minutes} min` : "almost there"
+              // The cap is stated rather than silently applied. The credit is
+              // real and the stats page counts all of it; what this ring will
+              // not do is close on walking alone.
+              goal.stepsCapped
+                ? "walking is counted, up to half the ring"
+                : goal.cardio.met
+                  ? null
+                  : minutes > 0
+                    ? `about ${minutes} min`
+                    : "almost there"
             }
           />
         </dl>

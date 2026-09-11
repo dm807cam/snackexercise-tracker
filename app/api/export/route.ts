@@ -13,8 +13,10 @@ export const dynamic = "force-dynamic";
  * and the daily metrics. Same reasoning as the muscle weightings: without
  * cardioBias and mets, restored entries could not reproduce the balance marker.
  * Version 3 adds the per-entry effort rating, which scales effective sets and
- * so is likewise needed to reproduce them. The v1 and v2 readers are kept in
- * the import route, so an old backup still restores.
+ * so is likewise needed to reproduce them; version 4 adds each day's brisk
+ * minutes, which decide how much of its walking is credited at the brisk rate.
+ * The v1, v2 and v3 readers are kept in the import route, so an old backup
+ * still restores.
  */
 export async function GET() {
   const [exercises, entries, settings, dailyMetrics] = await Promise.all([
@@ -28,7 +30,7 @@ export async function GET() {
   ]);
 
   const payload = {
-    version: 3,
+    version: 4,
     exportedAt: new Date().toISOString(),
     exercises: exercises.map((e) => ({
       slug: e.slug,
@@ -58,6 +60,7 @@ export async function GET() {
     dailyMetrics: dailyMetrics.map((m) => ({
       localDate: m.localDate,
       steps: m.steps,
+      activeMinutes: m.activeMinutes,
       source: m.source,
     })),
     settings: Object.fromEntries(

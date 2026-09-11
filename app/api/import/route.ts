@@ -14,12 +14,13 @@ export const dynamic = "force-dynamic";
  * Version 1 predates cardio, so its files carry no cardioBias, no distance and
  * no daily metrics; version 2 predates the per-entry effort rating. Rather than
  * a schema per version, the new fields default: a v1 exercise restores at bias
- * 0, which is exactly what it was — resistance work — and a v2 entry restores
- * with no effort rating, which is exactly what it had. An old backup must never
- * stop restoring because the app grew.
+ * 0, which is exactly what it was — resistance work — a v2 entry restores with
+ * no effort rating, and a v3 day restores with no brisk minutes. Each is
+ * exactly what it had. An old backup must never stop restoring because the app
+ * grew.
  */
 const importSchema = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   exercises: z.array(
     z.object({
       slug: z.string().min(1),
@@ -59,6 +60,7 @@ const importSchema = z.object({
       z.object({
         localDate: localDateSchema,
         steps: z.number().int().min(0).max(200000).nullish(),
+        activeMinutes: z.number().int().min(0).max(1440).nullish(),
         source: z.string().default("import"),
       }),
     )
@@ -156,8 +158,17 @@ export async function POST(request: NextRequest) {
     for (const day of data.dailyMetrics ?? []) {
       await prisma.dailyMetric.upsert({
         where: { localDate: day.localDate },
-        create: { localDate: day.localDate, steps: day.steps ?? null, source: day.source },
-        update: { steps: day.steps ?? null, source: day.source },
+        create: {
+          localDate: day.localDate,
+          steps: day.steps ?? null,
+          activeMinutes: day.activeMinutes ?? null,
+          source: day.source,
+        },
+        update: {
+          steps: day.steps ?? null,
+          activeMinutes: day.activeMinutes ?? null,
+          source: day.source,
+        },
       });
       metrics += 1;
     }

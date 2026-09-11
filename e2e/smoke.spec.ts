@@ -525,3 +525,35 @@ test.describe("how hard, not just how much", () => {
     }
   });
 });
+
+/**
+ * The ring is a training prompt, and the whole point of this one is that a
+ * walk to the shops must not answer it. Worth driving through the real app
+ * because the number involved is large and easy to get wrong.
+ */
+test.describe("walking does not finish the day for you", () => {
+  test("a huge step count fills half the cardio ring and no more", async ({ page }) => {
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    try {
+      // Far more than the ~9,400 that used to close the ring outright.
+      const response = await page.request.put(`/api/metrics/${today}`, {
+        data: { steps: 40000, source: "manual" },
+      });
+      expect(response.ok()).toBe(true);
+
+      await page.goto(`/day/${today}`);
+      const rings = page.getByRole("img", { name: /Today's targets/ });
+      await expect(rings).toBeVisible();
+      await expect(rings).toHaveAttribute("aria-label", /MET-minutes still to go/);
+
+      // And the cap is said out loud rather than silently applied.
+      await expect(page.getByText("walking is counted, up to half the ring")).toBeVisible();
+    } finally {
+      await page.request.put(`/api/metrics/${today}`, {
+        data: { steps: null, source: "manual" },
+      });
+    }
+  });
+});
