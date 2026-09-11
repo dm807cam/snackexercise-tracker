@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { axisLabel } from "@/lib/muscles";
 import { formatSets } from "@/lib/format";
 import { isBelowTargetVolume } from "@/lib/volume";
+import { VIGOROUS_TARGET_MINUTES_PER_WEEK } from "@/lib/intensity";
 import { MuscleRadar } from "./MuscleRadar";
 import { ProgressList, type ProgressPayload } from "./ProgressList";
 import { BalanceGradient, type BalancePayload } from "./BalanceGradient";
@@ -64,6 +65,16 @@ export interface StatsPayload {
   progress: ProgressPayload[];
   /** The weekly doses this window was measured against. */
   targets: { cardioMetMinutesPerWeek: number; strengthHardSetsPerWeek: number };
+  /** How much of the window was hard, kept apart from how much there was. */
+  intensity: {
+    vigorousMinutes: number;
+    vigorousMetMinutes: number;
+    vigorousBouts: number;
+    vigorousMinutesPerWeek: number;
+    vigorousBoutsPerDay: number;
+    daysSinceVigorous: number | null;
+    personalised: boolean;
+  };
 }
 
 /**
@@ -127,6 +138,10 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
 
   const showCardioRow = stats.daysSinceCardio === null || stats.daysSinceCardio >= 5;
   const stalled = stats.progress.filter((p) => p.stalled);
+  // "No vigorous effort in eleven days" is a row the app simply could not write
+  // before it could classify intensity at all.
+  const showVigorousRow =
+    stats.intensity.daysSinceVigorous === null || stats.intensity.daysSinceVigorous >= 7;
 
   return (
     <div className="pb-4">
@@ -221,7 +236,47 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           </p>
         )}
 
-        {(neglected.length > 0 || showCardioRow || stalled.length > 0) && (
+        {/*
+          The vigorous fraction, beside the total rather than folded into it.
+          MET-minutes collapse intensity and duration into one product, so 150
+          minutes of strolling and 37 minutes of hard running are the same
+          number — and at MATCHED volume a higher vigorous proportion is
+          associated with lower mortality (Wang 2021). Bouts are shown as well
+          as minutes because this app's format is the short effort a
+          minutes-based target rounds away (VILPA, Stamatakis 2022).
+        */}
+        <section className="mt-6">
+          <h2 className="mb-2 text-sm font-semibold">How hard, not just how much</h2>
+          <dl className="grid grid-cols-3 gap-2">
+            <Stat
+              label="Vigorous/wk"
+              value={
+                stats.intensity.vigorousMinutesPerWeek > 0
+                  ? `${Math.round(stats.intensity.vigorousMinutesPerWeek)} min`
+                  : "—"
+              }
+            />
+            <Stat label="Of a target" value={`${VIGOROUS_TARGET_MINUTES_PER_WEEK} min`} />
+            <Stat
+              label="Hard bouts/day"
+              value={
+                stats.intensity.vigorousBouts > 0
+                  ? stats.intensity.vigorousBoutsPerDay.toFixed(1)
+                  : "—"
+              }
+            />
+          </dl>
+          <p className="mt-2 text-xs text-dim">
+            {stats.intensity.personalised
+              ? "Read against your own predicted maximum heart rate. "
+              : "Add your year of birth in Settings and heart rates are read against your own maximum rather than a fixed 150 bpm. "}
+            Short efforts count: three vigorous bouts a day of a minute or two is the pattern the
+            VILPA work associates with lower mortality, and it is worth far more than the four
+            minutes it adds to the total.
+          </p>
+        </section>
+
+        {(neglected.length > 0 || showCardioRow || stalled.length > 0 || showVigorousRow) && (
           <section className="mt-6">
             <h2 className="mb-2 text-sm font-semibold">Needs attention</h2>
             <p className="mb-2 text-xs text-dim">
@@ -253,6 +308,23 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
                   attention, and the only one that is about a specific
                   movement rather than a muscle group. Capped at two so the
                   list stays a list rather than becoming the page. */}
+              {showVigorousRow && (
+                <li className="surface flex items-center justify-between rounded-lg px-3 py-2 text-sm">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: "var(--cardio)" }}
+                    />
+                    Vigorous effort
+                  </span>
+                  <span className="tabular-nums text-dim">
+                    {stats.intensity.daysSinceVigorous === null
+                      ? "never"
+                      : `${stats.intensity.daysSinceVigorous}d ago`}
+                  </span>
+                </li>
+              )}
               {stalled.slice(0, 2).map((row) => (
                 <li
                   key={row.exerciseId}

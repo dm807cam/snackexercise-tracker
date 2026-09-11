@@ -31,6 +31,8 @@ import {
 import {
   DEFAULT_STEP_BASELINE,
   entryMetMinutes,
+  entryMinutes,
+  metsForEntry,
   impliedStepsFromEntries,
   personalStepBaseline,
   stepMetMinutes,
@@ -40,6 +42,14 @@ import {
 import { buildBalance, effectiveSetEquivalents } from "./balance";
 import { normalisePerMuscleTarget } from "./volume";
 import { normaliseTargets, type Targets } from "./targets";
+import {
+  MAX_RESTING_HR,
+  MIN_BIRTH_YEAR,
+  MIN_RESTING_HR,
+  classifyIntensity,
+  summariseIntensity,
+  type Physiology,
+} from "./intensity";
 import {
   PROGRESSION_MAX_CARDIO_BIAS,
   buildExerciseProgress,
@@ -109,6 +119,16 @@ export async function getEntriesInRange(
 export async function getDaySummary(
   date: LocalDate,
   timeZone?: string,
+  /**
+   * The app's today, for anchoring the step baseline's 90-day window.
+   *
+   * Passed rather than defaulted to the container's local date, so the day
+   * ring and the balance marker cannot end up on different baselines under a
+   * Settings timezone override that crosses a date boundary — which is exactly
+   * the disagreement `stepMetMinutes` below says it exists to prevent. (The
+   * other half of that scan's cost, its lack of memoisation, is issue #23.)
+   */
+  today: LocalDate = todayLocalDate(),
 ): Promise<DaySummary & {
   entries: EntryWithExercise[];
   steps: number | null;
@@ -134,13 +154,19 @@ export async function getDaySummary(
   /** The weekly doses the day's rings are a seventh of. */
   targets: Targets;
 }> {
-  const [entries, steps, activeWindow, stepSettings, targets] = await Promise.all([
+  const [entries, steps, activeWindow, stepSettings, targets, physiology] = await Promise.all([
     getEntriesForDate(date),
     getSteps(date),
     getActiveWindow(),
-    getStepSettings(),
+    getStepSettings(today),
     getTargets(),
+    getPhysiology(),
   ]);
+
+  // Read against the day being viewed, so a heart rate is scored for the age
+  // the user was, and so the day page and the stats page cannot disagree about
+  // what a MET-minute was worth.
+  const intensityContext = { physiology, today: date };
 
   const summary = summariseDay(date, entries);
 
@@ -148,8 +174,10 @@ export async function getDaySummary(
     ...summary,
     entries,
     steps,
-    cardioMuscles: muscleCardioLoad(entries, entryMetMinutes),
-    metMinutes: Math.round(entries.reduce((sum, e) => sum + entryMetMinutes(e), 0)),
+    cardioMuscles: muscleCardioLoad(entries, (e) => entryMetMinutes(e, intensityContext)),
+    metMinutes: Math.round(
+      entries.reduce((sum, e) => sum + entryMetMinutes(e, intensityContext), 0),
+    ),
     stepMetMinutes: Math.round(
       stepMetMinutes(steps, stepSettings, impliedStepsFromEntries(entries)),
     ),
@@ -184,6 +212,29 @@ export async function getActiveWindow(): Promise<ActiveWindow> {
     : DEFAULT_ACTIVE_WINDOW.endHour;
 
   return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
+}
+
+/**
+ * What the app knows about whose heart rate it is reading.
+ *
+ * Both halves optional and both harmless when absent: without a birth year the
+ * heart-rate factor falls back to the fixed anchor it always used, so entering
+ * an age improves the estimate rather than restating anything already logged.
+ */
+export async function getPhysiology(): Promise<Physiology> {
+  const settings = await getSettings();
+
+  const birthYear = Number(settings.birthYear);
+  const restingHr = Number(settings.restingHr);
+
+  return {
+    birthYear:
+      Number.isInteger(birthYear) && birthYear >= MIN_BIRTH_YEAR ? birthYear : null,
+    restingHr:
+      Number.isFinite(restingHr) && restingHr >= MIN_RESTING_HR && restingHr <= MAX_RESTING_HR
+        ? restingHr
+        : null,
+  };
 }
 
 /**
@@ -246,12 +297,17 @@ export async function getDailyLoad(
   start: LocalDate,
   end: LocalDate,
 ): Promise<Record<LocalDate, DayLoad>> {
-  const [entries, stepsByDate, stepSettings, targets] = await Promise.all([
+  const [entries, stepsByDate, stepSettings, targets, physiology] = await Promise.all([
     getEntriesInRange(start, end),
     getStepsInRange(start, end),
     getStepSettings(),
     getTargets(),
+    getPhysiology(),
   ]);
+
+  // Anchored on the end of the range, so a month of shading is read on one
+  // scale rather than shifting mid-grid on a birthday.
+  const intensityContext = { physiology, today: end };
 
   const byDay: Record<string, DayLoad> = {};
   const entriesByDate = new Map<string, EntryWithExercise[]>();
@@ -270,7 +326,7 @@ export async function getDailyLoad(
     let metMinutes = 0;
     for (const entry of dayEntries) {
       effectiveSets += entryEffectiveSets(entry);
-      metMinutes += entryMetMinutes(entry);
+      metMinutes += entryMetMinutes(entry, intensityContext);
     }
 
     const steps = stepsByDate[date];
@@ -563,6 +619,7 @@ export async function loadStats(
     perMuscleTarget,
     progress,
     targets,
+    physiology,
   ] = await Promise.all([
     getEntriesInRange(current.start, current.end),
     comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
@@ -577,7 +634,12 @@ export async function loadStats(
     // to see one, whatever window the user is reading the rest of the page on.
     getExerciseProgress(addDays(today, -(PROGRESS_WINDOW_DAYS - 1)), today, today),
     getTargets(),
+    getPhysiology(),
   ]);
+
+  // One context for the whole window, so every MET figure on the page is read
+  // on the same scale — the user's own, once they have entered an age.
+  const intensityContext = { physiology, today };
 
   const balance = buildBalance({
     windowDays,
@@ -585,6 +647,7 @@ export async function loadStats(
     stepsByDate: steps,
     stepSettings,
     targets,
+    intensityContext,
   });
 
   const minutesByDate = new Map<string, number[]>();
@@ -617,8 +680,28 @@ export async function loadStats(
     // The radar's second series: MET-minutes carried onto the effective-set
     // scale by the balance module's guideline exchange rate. Converted here,
     // once, so the chart never has to know either currency.
-    cardioLoadFor: (entry) => effectiveSetEquivalents(entryMetMinutes(entry), targets),
+    cardioLoadFor: (entry) =>
+      effectiveSetEquivalents(entryMetMinutes(entry, intensityContext), targets),
     targets,
+    intensity: summariseIntensity({
+      entries: currentEntries,
+      windowDays,
+      physiology,
+      today,
+      classify: (entry) =>
+        classifyIntensity(
+          {
+            mets: metsForEntry(entry, intensityContext),
+            avgHeartRate: entry.avgHeartRate,
+          },
+          physiology,
+          today,
+        ),
+      metMinutesFor: (entry) => entryMetMinutes(entry, intensityContext),
+      minutesFor: entryMinutes,
+      dateOf: (entry) => entry.localDate,
+      daysBetween,
+    }),
   });
 }
 

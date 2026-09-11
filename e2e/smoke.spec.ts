@@ -496,3 +496,32 @@ test.describe("what you are aiming at", () => {
     }
   });
 });
+
+/**
+ * The two numbers that turn a heart rate into an intensity. Worth an end-to-end
+ * pass because the promise is specifically that entering them changes what the
+ * app shows, and that leaving them blank changes nothing.
+ */
+test.describe("how hard, not just how much", () => {
+  test("a year of birth switches the app onto a personal heart-rate scale", async ({ page }) => {
+    try {
+      await page.goto("/stats");
+      await expect(page.getByRole("heading", { name: "How hard, not just how much" })).toBeVisible();
+      // Before: the app says what the setting would buy.
+      await expect(page.getByText(/Add your year of birth/)).toBeVisible();
+
+      await page.goto("/settings");
+      await page.getByLabel("Year of birth").fill("1986");
+      await page.getByLabel("Resting heart rate").click();
+      await expect(page.getByText("Saved")).toBeVisible();
+
+      await page.goto("/stats");
+      await expect(page.getByText(/Read against your own predicted maximum/)).toBeVisible();
+      await expect(page.getByText(/Add your year of birth/)).toHaveCount(0);
+    } finally {
+      await page.goto("/settings");
+      await page.getByLabel("Year of birth").fill("");
+      await page.getByLabel("Resting heart rate").click();
+    }
+  });
+});

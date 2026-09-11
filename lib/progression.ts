@@ -71,15 +71,37 @@ export interface ProgressionEntry {
 export const E1RM_REP_CAP = 12;
 
 /**
+ * How much each rep past the cap is still worth, as a fraction of the capped
+ * estimate.
+ *
+ * Small, but not zero. A flat cap made every loaded set above twelve reps
+ * produce an IDENTICAL estimate, so going from 20 kg x 12 to 20 kg x 20 — a
+ * real and substantial improvement — read as a flat series, got flagged as
+ * stalled, landed in "needs attention" and triggered a ladder upgrade nobody
+ * needed. Half a percent a rep keeps the estimate honest about load while
+ * keeping the series strictly increasing, which is the property every
+ * conclusion in this file rests on.
+ */
+const E1RM_PAST_CAP_PER_REP = 0.005;
+
+/**
  * Estimated one-rep max, Epley: `w x (1 + reps / 30)`.
  *
  * Epley rather than Brzycki because Brzycki's `36 / (37 - reps)` is undefined at
  * 37 reps and absurd well before it, and this app has no rep ceiling — someone
  * logs "50 bodyweight squats" and means it.
+ *
+ * The rep term is capped at twelve, where Epley stops being an estimate and
+ * starts inflating: a set of thirty would otherwise come out at twice the load
+ * actually handled. Past the cap the estimate keeps creeping up, slowly, so
+ * more reps at the same load is still visible as progress.
  */
 export function estimatedOneRepMax(weightKg: number, reps: number): number {
   if (!(weightKg > 0) || !(reps > 0)) return 0;
-  return weightKg * (1 + Math.min(reps, E1RM_REP_CAP) / 30);
+
+  const capped = weightKg * (1 + Math.min(reps, E1RM_REP_CAP) / 30);
+  const beyond = Math.max(0, reps - E1RM_REP_CAP);
+  return capped * (1 + beyond * E1RM_PAST_CAP_PER_REP);
 }
 
 /**
@@ -204,6 +226,14 @@ export interface ProgressionTrend {
 export function progressionTrend(
   series: readonly ProgressionPoint[],
   today: LocalDate,
+  /**
+   * The last day the movement was trained AT ALL, which is not the last day of
+   * the series: the series only holds days carrying a value on the chosen
+   * metric. A movement usually logged with load but sometimes bodyweight would
+   * otherwise look abandoned, and the recency guard below would suppress a
+   * stall that is entirely current.
+   */
+  lastTrained: LocalDate = series[series.length - 1]?.date,
 ): ProgressionTrend | null {
   if (series.length === 0) return null;
 
@@ -216,7 +246,7 @@ export function progressionTrend(
 
   const latest = series[series.length - 1];
   const weeksFlat = Math.floor(Math.max(0, daysBetween(best.date, today)) / 7);
-  const daysSinceTrained = Math.max(0, daysBetween(latest.date, today));
+  const daysSinceTrained = Math.max(0, daysBetween(lastTrained ?? latest.date, today));
 
   return {
     sessions: series.length,
@@ -262,7 +292,15 @@ export function buildExerciseProgress(
   if (!metric) return null;
 
   const series = progressionSeries(exercise.entries, metric);
-  const trend = progressionTrend(series, today);
+
+  // Every day the movement was trained, not only the days that carry a value on
+  // the chosen metric.
+  let lastTrained: LocalDate | undefined;
+  for (const entry of exercise.entries) {
+    if (!lastTrained || entry.localDate > lastTrained) lastTrained = entry.localDate;
+  }
+
+  const trend = progressionTrend(series, today, lastTrained);
   if (!trend) return null;
 
   return {

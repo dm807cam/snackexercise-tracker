@@ -4,6 +4,7 @@ import {
   getActiveWindow,
   getExercises,
   getPerMuscleTarget,
+  getPhysiology,
   getSettings,
   getStepSettings,
   getTargets,
@@ -18,11 +19,12 @@ export default async function SettingsPage() {
     getSettings(),
     getExercises(),
   ]);
-  const [stepSettings, activeWindow, perMuscleTarget, targets] = await Promise.all([
+  const [stepSettings, activeWindow, perMuscleTarget, targets, physiology] = await Promise.all([
     getStepSettings(config.today),
     getActiveWindow(),
     getPerMuscleTarget(),
     getTargets(),
+    getPhysiology(),
   ]);
 
   return (
@@ -39,6 +41,7 @@ export default async function SettingsPage() {
         dayEndHour: activeWindow.endHour,
         perMuscleTarget,
         targets,
+        physiology,
       }}
       exercises={exercises}
     />

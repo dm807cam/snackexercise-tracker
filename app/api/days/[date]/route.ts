@@ -12,8 +12,8 @@ type Ctx = { params: Promise<{ date: string }> };
 export async function GET(_request: NextRequest, { params }: Ctx) {
   return handle(async () => {
     const { date } = await params;
-    const { timeZone } = await getAppConfig();
-    return getDaySummary(localDateSchema.parse(date), timeZone);
+    const { timeZone, today } = await getAppConfig();
+    return getDaySummary(localDateSchema.parse(date), timeZone, today);
   });
 }
 

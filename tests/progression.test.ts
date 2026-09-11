@@ -38,8 +38,29 @@ describe("estimatedOneRepMax", () => {
 
   it("caps the rep term rather than letting a high-rep set invent a max", () => {
     // Epley is fitted on low-rep work; a set of 30 would otherwise come out at
-    // twice the load actually handled.
-    expect(estimatedOneRepMax(50, 30)).toBe(estimatedOneRepMax(50, E1RM_REP_CAP));
+    // twice the load actually handled. Uncapped Epley gives 50 x (1 + 30/30) =
+    // 100; the capped form must stay well under it.
+    const uncapped = 50 * (1 + 30 / 30);
+    expect(estimatedOneRepMax(50, 30)).toBeLessThan(uncapped * 0.85);
+    expect(estimatedOneRepMax(50, 30)).toBeGreaterThan(estimatedOneRepMax(50, E1RM_REP_CAP));
+  });
+
+  it("still rises past the cap, so more reps at the same load reads as progress", () => {
+    // A flat cap made every loaded set above twelve reps identical, so going
+    // from 20 kg x 12 to 20 kg x 20 read as a flat series — flagged stalled,
+    // listed in "needs attention", and upgraded up the ladder for no reason.
+    const twelve = estimatedOneRepMax(20, 12);
+    const twenty = estimatedOneRepMax(20, 20);
+
+    expect(twenty).toBeGreaterThan(twelve);
+    // And only just: it must not start claiming a bigger maximum.
+    expect(twenty).toBeLessThan(twelve * 1.1);
+  });
+
+  it("is strictly increasing in reps at every point", () => {
+    for (let reps = 1; reps < 40; reps++) {
+      expect(estimatedOneRepMax(60, reps + 1)).toBeGreaterThan(estimatedOneRepMax(60, reps));
+    }
   });
 
   it("is zero without both a load and reps", () => {
@@ -191,6 +212,15 @@ describe("progressionTrend", () => {
     expect(trend.sessions).toBeGreaterThanOrEqual(MIN_SESSIONS_FOR_STALL);
     expect(trend.weeksFlat).toBeGreaterThanOrEqual(STALL_WEEKS);
     expect(trend.stalled).toBe(true);
+  });
+
+  it("measures recency from the last day TRAINED, not the last day on the metric", () => {
+    // An e1rm movement mostly logged bodyweight has a sparse series, so reading
+    // recency off the series would call a current stall abandoned and suppress
+    // it. The last day trained is passed in separately for exactly this.
+    const stale = progressionTrend(flat(8, 10, 60), TODAY, TODAY)!;
+    expect(stale.daysSinceTrained).toBe(0);
+    expect(stale.stalled).toBe(true);
   });
 
   it("stops calling it stalled once the user has moved on", () => {

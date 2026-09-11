@@ -14,6 +14,13 @@ import {
   normalisePerMuscleTarget,
 } from "@/lib/volume";
 import {
+  MAX_RESTING_HR,
+  MIN_BIRTH_YEAR,
+  MIN_RESTING_HR,
+  normalisePhysiologyInput,
+  type Physiology,
+} from "@/lib/intensity";
+import {
   GUIDELINE_FLOOR_MET_MIN_PER_WEEK,
   MAX_CARDIO_TARGET,
   MAX_STRENGTH_TARGET,
@@ -44,6 +51,7 @@ export function SettingsView({
     dayEndHour: number;
     perMuscleTarget: number;
     targets: Targets;
+    physiology: Physiology;
   };
   exercises: ExerciseOption[];
 }) {
@@ -69,6 +77,36 @@ export function SettingsView({
   // preset tap followed by typing the old number back inside that window would
   // suppress the second save and leave the field and the database disagreeing.
   const [savedTargets, setSavedTargets] = useState(initial.targets);
+  const [birthYear, setBirthYear] = useState(
+    initial.physiology.birthYear ? String(initial.physiology.birthYear) : "",
+  );
+  const [restingHr, setRestingHr] = useState(
+    initial.physiology.restingHr ? String(initial.physiology.restingHr) : "",
+  );
+  const [savedPhysiology, setSavedPhysiology] = useState({
+    birthYear: initial.physiology.birthYear ? String(initial.physiology.birthYear) : "",
+    restingHr: initial.physiology.restingHr ? String(initial.physiology.restingHr) : "",
+  });
+
+  function savePhysiology(patch: { birthYear?: string; restingHr?: string }) {
+    // Normalised before storing, and written back into the field, so what the
+    // form shows is what the app will actually honour. Saving verbatim left
+    // `getPhysiology` silently discarding an out-of-range year under a "Saved"
+    // toast.
+    const stored = normalisePhysiologyInput(patch);
+    if (stored.birthYear !== undefined) setBirthYear(stored.birthYear);
+    if (stored.restingHr !== undefined) setRestingHr(stored.restingHr);
+
+    const next = { ...savedPhysiology, ...stored };
+    if (
+      next.birthYear === savedPhysiology.birthYear &&
+      next.restingHr === savedPhysiology.restingHr
+    ) {
+      return;
+    }
+    setSavedPhysiology(next);
+    save(stored);
+  }
   const preset = presetFor(targets);
 
   function saveTargets(next: Targets) {
@@ -324,6 +362,55 @@ export function SettingsView({
               }}
             />
           </div>
+        </Field>
+      </Section>
+
+      <Section title="How hard, not just how much">
+        <p className="mb-1 text-xs text-dim">
+          Two numbers, entered once. Without them a heart rate is read against a fixed 150 bpm,
+          which is about 79% of a 25-year-old&apos;s maximum and 90% of a 60-year-old&apos;s — the
+          same reading, very different efforts, and the app scored both the same. Leave them blank
+          and nothing already logged changes.
+        </p>
+
+        <Field
+          label="Year of birth"
+          htmlFor="birth-year"
+          hint="Sets your predicted maximum heart rate (Tanaka: 208 − 0.7 × age), which is what turns a heart rate into an intensity rather than a bare number."
+        >
+          <input
+            id="birth-year"
+            type="number"
+            inputMode="numeric"
+            min={MIN_BIRTH_YEAR}
+            max={new Date().getFullYear()}
+            value={birthYear}
+            onChange={(e) => setBirthYear(e.target.value)}
+            onBlur={() => savePhysiology({ birthYear: birthYear.trim() })}
+            placeholder="—"
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
+        </Field>
+
+        <Field
+          label="Resting heart rate"
+          htmlFor="resting-hr"
+          hint="Optional, and better if you have it: with a resting rate the app uses heart-rate reserve, which knows that two people at 130 bpm are not working equally hard if one sits at 45 and the other at 75."
+        >
+          <input
+            id="resting-hr"
+            type="number"
+            inputMode="numeric"
+            min={MIN_RESTING_HR}
+            max={MAX_RESTING_HR}
+            value={restingHr}
+            onChange={(e) => setRestingHr(e.target.value)}
+            onBlur={() => savePhysiology({ restingHr: restingHr.trim() })}
+            placeholder="—"
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
         </Field>
       </Section>
 
