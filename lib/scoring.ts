@@ -35,6 +35,11 @@ import { type LocalDate, daysBetween } from "./dates";
 import type { BalanceResult } from "./balance";
 import type { SpacingSummary } from "./spacing";
 import { effortBreakdown, effortMultiplier, type EffortBreakdown } from "./effort";
+import {
+  PER_MUSCLE_TARGET_SETS_PER_WEEK,
+  UPPER_BAND_MULTIPLE,
+  axisVolumeTarget,
+} from "./volume";
 
 export interface ScoredEntry {
   id: string;
@@ -261,6 +266,15 @@ export interface AxisStat {
   cardioTotal: number;
   /** Days since this axis was last trained; null if never (within the data). */
   daysSinceTrained: number | null;
+  /**
+   * Effective sets a week this axis should be carrying — an ABSOLUTE reference,
+   * from the per-muscle hypertrophy target rather than from the user's own
+   * busiest spoke. Without it a uniformly under-trained log draws a full,
+   * even polygon and nothing in the app ever disagrees. See lib/volume.ts.
+   */
+  targetPerWeek: number;
+  /** Top of the target band, where the dose-response has clearly flattened. */
+  upperPerWeek: number;
 }
 
 export interface StatsResult {
@@ -296,6 +310,11 @@ export interface StatsResult {
   daysSinceCardio: number | null;
   /** How well the window's training was spread through each day. */
   spacing: SpacingSummary;
+  /**
+   * The per-muscle weekly volume target the axis targets above are built from.
+   * Carried so the UI can name it without recomputing it.
+   */
+  perMuscleTarget: number;
 }
 
 /**
@@ -329,6 +348,8 @@ export function buildStats<T extends ScoredEntry>(params: {
    * cycle, never becomes necessary.
    */
   cardioLoadFor: (entry: T) => number;
+  /** Hard sets per muscle per week the user is aiming at. */
+  perMuscleTarget?: number;
 }): StatsResult {
   const {
     windowDays,
@@ -343,6 +364,7 @@ export function buildStats<T extends ScoredEntry>(params: {
     daysWithSteps,
     spacing,
     cardioLoadFor,
+    perMuscleTarget = PER_MUSCLE_TARGET_SETS_PER_WEEK,
   } = params;
 
   const currentAxes = rollUpToAxes(muscleEffectiveSets(current));
@@ -361,6 +383,8 @@ export function buildStats<T extends ScoredEntry>(params: {
       cardioPerWeek: round(perWeek(currentCardio[slug], windowDays)),
       previousCardioPerWeek: round(perWeek(previousCardio[slug], windowDays)),
       daysSinceTrained: last ? Math.max(0, daysBetween(last, today)) : null,
+      targetPerWeek: round(axisVolumeTarget(slug, perMuscleTarget)),
+      upperPerWeek: round(axisVolumeTarget(slug, perMuscleTarget) * UPPER_BAND_MULTIPLE),
     };
   });
 
@@ -380,6 +404,7 @@ export function buildStats<T extends ScoredEntry>(params: {
     balance,
     daysSinceCardio: lastCardio ? Math.max(0, daysBetween(lastCardio, today)) : null,
     spacing,
+    perMuscleTarget,
   };
 }
 

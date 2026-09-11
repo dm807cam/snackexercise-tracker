@@ -9,6 +9,7 @@ import {
 import { axisForMuscle, type AxisSlug } from "@/lib/muscles";
 import { AXES } from "@/lib/muscles";
 import type { AxisStat } from "@/lib/scoring";
+import { axisVolumeTarget } from "@/lib/volume";
 
 function axis(slug: AxisSlug, overrides: Partial<AxisStat> = {}): AxisStat {
   return {
@@ -20,6 +21,8 @@ function axis(slug: AxisSlug, overrides: Partial<AxisStat> = {}): AxisStat {
     total: 0,
     cardioTotal: 0,
     daysSinceTrained: 0,
+    targetPerWeek: axisVolumeTarget(slug),
+    upperPerWeek: axisVolumeTarget(slug) * 2,
     ...overrides,
   };
 }
@@ -224,5 +227,72 @@ describe("buildSuggestion", () => {
       now: { nowMin: 18 * 60, boutMinutes: [9 * 60], window: { startHour: 8, endHour: 22 } },
     });
     expect(suggestion.nudge).toBe("9h since your last snack");
+  });
+});
+
+describe("the deficit is measured against what an axis needs", () => {
+  it("still finds something to suggest when everything is equally under-trained", () => {
+    // The headline defect. Under the old relative form every axis matched the
+    // busiest, so every deficit was 0 and the ranking collapsed to staleness —
+    // which on a log where everything was trained today is no signal at all.
+    const ranked = rankAxes({
+      axes: levelAxes(3),
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+    });
+
+    const strength = ranked.filter((c) => c.axis !== null);
+    expect(strength[0].score).toBeGreaterThan(0);
+    // And it picks the axis furthest below its own requirement, which at equal
+    // volume is one of the three-muscle spokes.
+    expect(["shoulders", "back"]).toContain(strength[0].axis);
+  });
+
+  it("stops nudging toward an axis that is already on target", () => {
+    const onTarget = AXES.map((a) =>
+      axis(a.slug, { perWeek: axisVolumeTarget(a.slug) * 2, daysSinceTrained: 0 }),
+    );
+    const ranked = rankAxes({
+      axes: onTarget,
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+    });
+
+    for (const candidate of ranked) expect(candidate.score).toBe(0);
+  });
+
+  it("does not nudge toward a well-served axis merely because another is busier", () => {
+    // 30 sets on chest and 8 on hamstrings: hamstrings used to score a 0.73
+    // deficit against chest, though 8 is a perfectly good hamstring week.
+    const axes = [
+      axis("chest", { perWeek: 30, daysSinceTrained: 0 }),
+      axis("hamstrings", { perWeek: 8, daysSinceTrained: 0 }),
+    ];
+    const ranked = rankAxes({ axes, daysSinceCardio: 0, cardioMetMinutesPerWeek: 600 });
+    const hamstrings = ranked.find((c) => c.axis === "hamstrings")!;
+
+    // Both are on or near target, so neither is urgent.
+    expect(hamstrings.score).toBeLessThan(0.15);
+  });
+
+  it("explains a same-day pick by the shortfall rather than by a comparison", () => {
+    const thin = rankAxes({
+      axes: [axis("chest", { perWeek: 1, daysSinceTrained: 0 })],
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+    });
+    const suggestion = buildSuggestion({
+      axes: [axis("chest", { perWeek: 1, daysSinceTrained: 0 })],
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+      exercises: CATALOGUE,
+      recentIds: [],
+      axisOf: axisForMuscle,
+    });
+
+    expect(thin[0].axis).toBe("chest");
+    // "least volume this window" was true of something on every possible log,
+    // including one where everything was already on target.
+    expect(suggestion.reason).toBe("below its weekly volume target");
   });
 });

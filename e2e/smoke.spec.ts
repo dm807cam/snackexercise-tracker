@@ -141,6 +141,14 @@ test.describe("cardio and steps", () => {
     // Identity is never carried by colour alone: both series are named.
     await expect(page.getByText("Strength", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Cardio", { exact: true }).first()).toBeVisible();
+
+    // And the polygon has something outside itself to be read against. Without
+    // this the chart scales every spoke by the largest spoke, so a uniformly
+    // under-trained log draws a full, even shape and nothing disagrees.
+    await expect(page.getByText(/Target \(\d+\/muscle\/wk\)/)).toBeVisible();
+    await expect(
+      page.getByText(/hard sets per muscle per week, where the hypertrophy/),
+    ).toBeVisible();
   });
 
   test("the calendar names both qualities, never colour alone", async ({ page }) => {

@@ -38,6 +38,7 @@ import {
   type StepsMode,
 } from "./cardio";
 import { buildBalance, effectiveSetEquivalents } from "./balance";
+import { normalisePerMuscleTarget } from "./volume";
 import {
   DEFAULT_ACTIVE_WINDOW,
   daySpacing,
@@ -172,6 +173,19 @@ export async function getActiveWindow(): Promise<ActiveWindow> {
     : DEFAULT_ACTIVE_WINDOW.endHour;
 
   return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
+}
+
+/**
+ * Hard sets per muscle per week the user is aiming at.
+ *
+ * Configurable for the same reason the active window is: ~10 is where the
+ * dose-response is clearly established, but someone deliberately running a
+ * higher-volume block should be able to say so and have the radar agree with
+ * them rather than draw a permanently full polygon.
+ */
+export async function getPerMuscleTarget(): Promise<number> {
+  const settings = await getSettings();
+  return normalisePerMuscleTarget(Number(settings.perMuscleTarget));
 }
 
 /** A day's training, split by quality and totalled. All on the effective-set scale. */
@@ -443,6 +457,7 @@ export async function loadStats(
     steps,
     stepSettings,
     activeWindow,
+    perMuscleTarget,
   ] = await Promise.all([
     getEntriesInRange(current.start, current.end),
     comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
@@ -451,6 +466,7 @@ export async function loadStats(
     getStepsInRange(current.start, current.end),
     getStepSettings(today),
     getActiveWindow(),
+    getPerMuscleTarget(),
   ]);
 
   const balance = buildBalance({
@@ -485,6 +501,7 @@ export async function loadStats(
     lastCardio,
     daysWithSteps: Object.keys(steps).length,
     spacing,
+    perMuscleTarget,
     // The radar's second series: MET-minutes carried onto the effective-set
     // scale by the balance module's guideline exchange rate. Converted here,
     // once, so the chart never has to know either currency.

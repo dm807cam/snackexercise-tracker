@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { axisLabel } from "@/lib/muscles";
 import { formatSets } from "@/lib/format";
+import { isBelowTargetVolume } from "@/lib/volume";
 import { MuscleRadar } from "./MuscleRadar";
 import { BalanceGradient, type BalancePayload } from "./BalanceGradient";
 import { SpacingCard, type SpacingPayload } from "./SpacingCard";
@@ -27,6 +28,9 @@ export interface AxisStat {
   total: number;
   cardioTotal: number;
   daysSinceTrained: number | null;
+  /** What this axis should be getting per week — absolute, see lib/volume.ts. */
+  targetPerWeek: number;
+  upperPerWeek: number;
 }
 
 export interface StatsPayload {
@@ -53,6 +57,8 @@ export interface StatsPayload {
   balance: BalancePayload;
   daysSinceCardio: number | null;
   spacing: SpacingPayload;
+  /** Hard sets per muscle per week the targets above are built from. */
+  perMuscleTarget: number;
 }
 
 /**
@@ -97,9 +103,22 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
     1,
     ...ranked.map((a) => Math.max(a.perWeek, a.cardioPerWeek)),
   );
+  // Two reasons an axis needs attention, not one. Staleness was the only one,
+  // so an axis trained every day at a trivial dose could never appear here
+  // however far below a useful volume it was — the failure mode the whole
+  // absolute reference exists to catch.
+  const stale = (a: AxisStat) => a.daysSinceTrained === null || a.daysSinceTrained >= 5;
+  const thin = (a: AxisStat) => isBelowTargetVolume(a.perWeek, a.targetPerWeek);
+
   const neglected = [...stats.axes]
-    .filter((a) => a.daysSinceTrained === null || a.daysSinceTrained >= 5)
-    .sort((a, b) => (b.daysSinceTrained ?? 9999) - (a.daysSinceTrained ?? 9999));
+    .filter((a) => stale(a) || thin(a))
+    // Staleness first, since nothing beats not having trained it at all; among
+    // equally recent axes the thinnest against its own target comes first.
+    .sort(
+      (a, b) =>
+        (b.daysSinceTrained ?? 9999) - (a.daysSinceTrained ?? 9999) ||
+        a.perWeek / Math.max(1, a.targetPerWeek) - b.perWeek / Math.max(1, b.targetPerWeek),
+    );
 
   const showCardioRow = stats.daysSinceCardio === null || stats.daysSinceCardio >= 5;
 
@@ -140,7 +159,11 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
       <div style={{ opacity: loading ? 0.5 : 1, transition: "opacity 150ms ease" }}>
         <BalanceGradient balance={stats.balance} />
 
-        <MuscleRadar data={stats.axes} showPrevious={showPrevious} />
+        <MuscleRadar
+          data={stats.axes}
+          showPrevious={showPrevious}
+          perMuscleTarget={stats.perMuscleTarget}
+        />
 
         <label className="mt-1 flex items-center justify-center gap-2 text-xs text-dim">
           <input
@@ -195,7 +218,8 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           <section className="mt-6">
             <h2 className="mb-2 text-sm font-semibold">Needs attention</h2>
             <p className="mb-2 text-xs text-dim">
-              Longest since you last trained these — the point of tracking snacks.
+              Longest since you last trained these, or furthest below {stats.perMuscleTarget} hard
+              sets per muscle per week.
             </p>
             <ul className="flex flex-col gap-2">
               {/* Cardio has no radar spoke — the radar is muscle coverage — but
@@ -234,12 +258,15 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
                     />
                     {axisLabel(stat.axis)}
                   </span>
+                  {/* An axis can be here for either reason, so the row says
+                      which. "today" beside a row in this list is otherwise
+                      simply confusing. */}
                   <span className="tabular-nums text-dim">
-                    {stat.daysSinceTrained === null
-                      ? "never"
-                      : stat.daysSinceTrained === 0
-                        ? "today"
-                        : `${stat.daysSinceTrained}d ago`}
+                    {stale(stat)
+                      ? stat.daysSinceTrained === null
+                        ? "never"
+                        : `${stat.daysSinceTrained}d ago`
+                      : `${formatSets(stat.perWeek)} of ${formatSets(stat.targetPerWeek)}/wk`}
                   </span>
                 </li>
               ))}

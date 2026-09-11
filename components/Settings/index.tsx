@@ -8,6 +8,11 @@ import { MUSCLES, muscleLabel } from "@/lib/muscles";
 import type { Units } from "@/lib/format";
 import { parseStepCsv } from "@/lib/steps-csv";
 import type { StepsMode } from "@/lib/cardio";
+import {
+  MAX_PER_MUSCLE_TARGET,
+  MIN_PER_MUSCLE_TARGET,
+  normalisePerMuscleTarget,
+} from "@/lib/volume";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
 import { ModelPicker } from "./ModelPicker";
@@ -26,6 +31,7 @@ export function SettingsView({
     resolvedBaseline: number;
     dayStartHour: number;
     dayEndHour: number;
+    perMuscleTarget: number;
   };
   exercises: ExerciseOption[];
 }) {
@@ -39,6 +45,12 @@ export function SettingsView({
   const [stepBaseline, setStepBaseline] = useState(initial.stepBaseline);
   const [dayStartHour, setDayStartHour] = useState(initial.dayStartHour);
   const [dayEndHour, setDayEndHour] = useState(initial.dayEndHour);
+  const [perMuscleTarget, setPerMuscleTarget] = useState(String(initial.perMuscleTarget));
+  // What is actually stored, tracked here rather than read back off `initial`:
+  // that prop only changes once the router refresh after a save has landed, so
+  // editing 10 to 12 and back to 10 inside that window suppressed the second
+  // save and left 12 in the database under a field reading 10.
+  const [savedTarget, setSavedTarget] = useState(initial.perMuscleTarget);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [editing, setEditing] = useState<ExerciseOption | null>(null);
   const [busy, setBusy] = useState(false);
@@ -273,6 +285,33 @@ export function SettingsView({
               }}
             />
           </div>
+        </Field>
+      </Section>
+
+      <Section title="How much is enough">
+        <Field
+          label="Hard sets per muscle, per week"
+          hint={`The reference the radar and the "needs attention" list are read against. About 10 is where the hypertrophy dose–response is clearly established; gains continue with diminishing returns to around 20, which is the fainter outer ring. Raise it if you are deliberately running a higher-volume block — the chart should agree with what you are actually aiming at rather than with whoever wrote the default.`}
+        >
+          <input
+            type="number"
+            inputMode="numeric"
+            min={MIN_PER_MUSCLE_TARGET}
+            max={MAX_PER_MUSCLE_TARGET}
+            value={perMuscleTarget}
+            onChange={(e) => setPerMuscleTarget(e.target.value)}
+            onBlur={() => {
+              // Normalised here as well as on read, so the field shows the
+              // value that was actually stored rather than what was typed.
+              const stored = normalisePerMuscleTarget(Number(perMuscleTarget));
+              setPerMuscleTarget(String(stored));
+              if (stored === savedTarget) return;
+              setSavedTarget(stored);
+              save({ perMuscleTarget: String(stored) });
+            }}
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
         </Field>
       </Section>
 
