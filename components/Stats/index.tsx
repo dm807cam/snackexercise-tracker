@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { axisLabel } from "@/lib/muscles";
 import { formatSets } from "@/lib/format";
-import { ATTENTION_VOLUME_FRACTION } from "@/lib/volume";
+import { isBelowTargetVolume } from "@/lib/volume";
 import { MuscleRadar } from "./MuscleRadar";
 import { BalanceGradient, type BalancePayload } from "./BalanceGradient";
 import { SpacingCard, type SpacingPayload } from "./SpacingCard";
@@ -108,7 +108,7 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
   // however far below a useful volume it was — the failure mode the whole
   // absolute reference exists to catch.
   const stale = (a: AxisStat) => a.daysSinceTrained === null || a.daysSinceTrained >= 5;
-  const thin = (a: AxisStat) => a.perWeek < a.targetPerWeek * ATTENTION_VOLUME_FRACTION;
+  const thin = (a: AxisStat) => isBelowTargetVolume(a.perWeek, a.targetPerWeek);
 
   const neglected = [...stats.axes]
     .filter((a) => stale(a) || thin(a))

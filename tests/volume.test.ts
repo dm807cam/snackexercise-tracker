@@ -6,6 +6,7 @@ import {
   PER_MUSCLE_TARGET_SETS_PER_WEEK,
   axisVolumeTarget,
   isBelowTargetVolume,
+  radarScale,
   normalisePerMuscleTarget,
   volumeDeficit,
 } from "@/lib/volume";
@@ -104,5 +105,38 @@ describe("isBelowTargetVolume", () => {
 
   it("says nothing about an axis with no target to be below", () => {
     expect(isBelowTargetVolume(0, 0)).toBe(false);
+  });
+});
+
+describe("radarScale", () => {
+  it("fits the data and the target, so an under-trained log draws inside the ring", () => {
+    const { max } = radarScale([3, 4, 30], [60]);
+    expect(max).toBe(30);
+  });
+
+  it("hides an upper bound the scale cannot hold", () => {
+    // recharts does not clip: an out-of-domain datum is projected past the
+    // outer radius, through the spoke labels and off the edge of the SVG.
+    expect(radarScale([3, 30], [60]).showUpper).toBe(false);
+  });
+
+  it("shows it once the user's own volume has reached it", () => {
+    const { max, showUpper } = radarScale([70, 30], [60]);
+    expect(max).toBe(70);
+    expect(showUpper).toBe(true);
+  });
+
+  it("shows it when it lands exactly on the edge", () => {
+    expect(radarScale([60, 30], [60]).showUpper).toBe(true);
+  });
+
+  it("never returns a zero domain, which would divide the whole chart by nothing", () => {
+    expect(radarScale([], []).max).toBe(1);
+    expect(radarScale([0, 0], []).max).toBe(1);
+  });
+
+  it("ignores nonsense rather than propagating it into the domain", () => {
+    expect(radarScale([5, Number.NaN], [Number.NaN]).max).toBe(5);
+    expect(radarScale([5], []).showUpper).toBe(false);
   });
 });

@@ -118,3 +118,30 @@ export function isBelowTargetVolume(perWeek: number, target: number): boolean {
   if (target <= 0) return false;
   return perWeek < target * ATTENTION_VOLUME_FRACTION;
 }
+
+/**
+ * The radial domain a radar should use, and whether the upper bound fits in it.
+ *
+ * Split out from the chart because it encodes an invariant rather than a style:
+ * recharts' polar scale is an unclamped linear scale, so a datum above the
+ * domain is NOT clipped to the plot — it is projected past the outer radius,
+ * through the spoke labels and off the edge of the SVG. Anything drawn has to
+ * fit, and the only reference allowed not to fit is one that is not drawn.
+ *
+ * `inScale` values always fit, because they are the data and the target. The
+ * upper bound is not one of them: including it would halve every real polygon
+ * to make room for a line most people never reach. So it appears exactly when
+ * the user's own volume has already pushed the radius out to it, which is also
+ * exactly when it is the interesting number.
+ */
+export function radarScale(
+  inScale: readonly number[],
+  upper: readonly number[],
+): { max: number; showUpper: boolean } {
+  const finite = (values: readonly number[]) => values.filter((v) => Number.isFinite(v));
+
+  const max = Math.max(1, ...finite(inScale));
+  const bounds = finite(upper);
+
+  return { max, showUpper: bounds.length > 0 && max >= Math.max(...bounds) };
+}

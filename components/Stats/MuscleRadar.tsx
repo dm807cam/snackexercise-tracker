@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { axisShortLabel } from "@/lib/muscles";
+import { UPPER_BAND_MULTIPLE, radarScale } from "@/lib/volume";
 
 export interface RadarDatum {
   axis: string;
@@ -54,7 +55,8 @@ export interface RadarDatum {
  * It is a BAND rather than a line because the evidence is a band — ~10 hard
  * sets per muscle per week where the dose-response is clear, continuing with
  * diminishing returns to ~20. A single ring would claim a precision the
- * meta-regressions do not have.
+ * meta-regressions do not have. The upper edge is drawn only once the scale
+ * reaches it; the copy names the number either way.
  *
  * The band is lumpy rather than circular, and that is correct: chest is one
  * muscle and wants ~10 a week, shoulders is front, side and rear delts and
@@ -90,14 +92,12 @@ export function MuscleRadar({
   // volume then sets the outer ring.
   //
   // The upper bound is deliberately NOT part of the scale: including it would
-  // halve every real polygon to make room for a line most people never reach,
-  // and the target is the number that matters. It is clipped when the user is
-  // below target, which is exactly when it is the less interesting of the two.
-  const max = Math.max(
-    1,
-    ...shaped.map((d) =>
-      Math.max(d.current, d.cardio, d.target, showPrevious ? d.previous : 0),
-    ),
+  // halve every real polygon to make room for a line most people never reach.
+  // It is drawn only when the radius already reaches it — see `radarScale`,
+  // which explains why anything drawn has to fit.
+  const { max, showUpper } = radarScale(
+    shaped.flatMap((d) => [d.current, d.cardio, d.target, showPrevious ? d.previous : 0]),
+    shaped.map((d) => d.upper),
   );
 
   const hasCardio = shaped.some((d) => d.cardio > 0);
@@ -139,16 +139,18 @@ export function MuscleRadar({
               fillOpacity={0}
               isAnimationActive={false}
             />
-            <Radar
-              name="Upper bound"
-              dataKey="upper"
-              stroke="var(--text-dim)"
-              strokeWidth={1}
-              strokeOpacity={0.35}
-              fill="none"
-              fillOpacity={0}
-              isAnimationActive={false}
-            />
+            {showUpper && (
+              <Radar
+                name="Upper bound"
+                dataKey="upper"
+                stroke="var(--text-dim)"
+                strokeWidth={1}
+                strokeOpacity={0.35}
+                fill="none"
+                fillOpacity={0}
+                isAnimationActive={false}
+              />
+            )}
 
             {showPrevious && (
               <Radar
@@ -194,9 +196,9 @@ export function MuscleRadar({
 
       <p className="mt-1 text-center text-[11px] leading-snug text-dim">
         The grey ring is {perMuscleTarget} hard sets per muscle per week, where the hypertrophy
-        dose–response is established; the fainter one outside it is {perMuscleTarget * 2}, where it
-        has clearly flattened. A spoke inside the ring is short of that dose however even the shape
-        looks.
+        dose–response is established. A spoke inside it is short of that dose however even the shape
+        looks; it flattens by about {perMuscleTarget * UPPER_BAND_MULTIPLE}
+        {showUpper ? ", the fainter ring outside" : ""}.
         {hasCardio &&
           " Both lines are on the effective-set scale — 10 cardio MET-minutes reach as far as one effective set, the same exchange rate the balance bar uses. They are never added together."}
       </p>

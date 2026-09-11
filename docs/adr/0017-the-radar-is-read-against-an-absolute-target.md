@@ -72,9 +72,15 @@ literature number honestly projected onto twelve spokes of different sizes. A
 circular ring would have meant three different things depending on the spoke.
 
 **A band, not a line.** The evidence is a range and a single ring would claim a
-precision the meta-regressions do not have. The outer bound is drawn but
-deliberately left out of the radial scale: including it would halve every real
-polygon to make room for a line most people never reach.
+precision the meta-regressions do not have. The outer bound is deliberately left
+out of the radial scale — including it would halve every real polygon to make
+room for a line most people never reach — and is therefore drawn only once the
+user's own volume has pushed the radius out to it, which is also exactly when it
+is the interesting number. It has to be conditional rather than merely
+out-of-domain: recharts' polar scale is an unclamped linear scale, so a datum
+above the domain is not clipped to the plot but projected past the outer radius,
+through the spoke labels and off the edge of the SVG. The copy names the upper
+number either way.
 
 **Solid grey, not dashed.** Dashed grey is already the previous-period overlay.
 A solid thin grey ring reads as a gridline placed at a radius that means

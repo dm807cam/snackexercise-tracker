@@ -46,6 +46,11 @@ export function SettingsView({
   const [dayStartHour, setDayStartHour] = useState(initial.dayStartHour);
   const [dayEndHour, setDayEndHour] = useState(initial.dayEndHour);
   const [perMuscleTarget, setPerMuscleTarget] = useState(String(initial.perMuscleTarget));
+  // What is actually stored, tracked here rather than read back off `initial`:
+  // that prop only changes once the router refresh after a save has landed, so
+  // editing 10 to 12 and back to 10 inside that window suppressed the second
+  // save and left 12 in the database under a field reading 10.
+  const [savedTarget, setSavedTarget] = useState(initial.perMuscleTarget);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [editing, setEditing] = useState<ExerciseOption | null>(null);
   const [busy, setBusy] = useState(false);
@@ -300,7 +305,9 @@ export function SettingsView({
               // value that was actually stored rather than what was typed.
               const stored = normalisePerMuscleTarget(Number(perMuscleTarget));
               setPerMuscleTarget(String(stored));
-              if (stored !== initial.perMuscleTarget) save({ perMuscleTarget: String(stored) });
+              if (stored === savedTarget) return;
+              setSavedTarget(stored);
+              save({ perMuscleTarget: String(stored) });
             }}
             className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
