@@ -22,7 +22,7 @@ accident.
 | [0011](./0011-spacing-score.md) | Spacing is scored by gap concentration against a target frequency | Accepted |
 | [0012](./0012-times-are-typed-not-stamped.md) | A typed time beats an instant built in the browser | Accepted |
 | [0013](./0013-one-colour-one-quality.md) | One colour, one quality — and `--accent` is not one of them | Accepted |
-| [0014](./0014-a-daily-share-with-no-carry-over.md) | Today's target is a flat seventh, and nothing carries over | Accepted |
+| [0014](./0014-a-daily-share-with-no-carry-over.md) | Today's target is a flat seventh, and nothing carries over | Accepted, amended by 0016 |
 | [0015](./0015-effort-scales-effective-sets.md) | Effort scales effective sets; an unrated set counts as a hard one | Accepted |
 | [0016](./0016-the-scalar-dose-is-hard-sets.md) | The scalar strength dose is hard sets, not summed effective sets | Accepted, amends 0005 |
 

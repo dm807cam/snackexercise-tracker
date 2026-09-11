@@ -349,11 +349,14 @@ test.describe("stating when, one half at a time", () => {
 test.describe("how hard it was", () => {
   test("a set rated easy is worth less, and survives a delete and undo", async ({ page }) => {
     // Start from a known day rather than from whatever earlier tests left
-    // behind, and hand it back empty at the end.
-    const today = new Date().toISOString().slice(0, 10);
-    await page.request.delete(`/api/days/${today}`);
-
+    // behind, and hand it back empty at the end. The day comes from the URL the
+    // app resolved, not from the runner's clock: the server runs in
+    // Europe/Berlin, so a UTC date would name the wrong day for the last couple
+    // of hours of every UTC day and the cleanup would miss.
     await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+    await page.request.delete(`/api/days/${today}`);
+    await page.reload();
     await page.getByRole("button", { name: "Log a snack" }).click();
     await page.getByRole("tab", { name: "Manual" }).click();
 

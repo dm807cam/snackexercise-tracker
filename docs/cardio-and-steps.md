@@ -456,10 +456,12 @@ Phases 1–4 are the feature. 5–6 are what make it usable a month later.
    third, separate number.
 2. **`activeDays` ignores steps.** Consistent with "it's a training log", but a
    16k-step hiking day arguably *is* an active day.
-3. **The strength target of 60 effective sets/week** is calibrated to this app's
-   own weighting convention (~2.2 effective sets per hard set). If those
-   weightings are ever edited in Settings, the target drifts with them — worth a
-   comment in the code so it isn't mistaken for a literature value.
+3. ~~**The strength target of 60 effective sets/week** is calibrated to this
+   app's own weighting convention (~2.2 effective sets per hard set). If those
+   weightings are ever edited in Settings, the target drifts with them.~~
+   **Settled** by ADR 0016: the drift was real, and the target is now ~27 *hard*
+   sets a week, which the weightings cannot move. 60 survives only as the scale
+   the radar and calendar are drawn against.
 4. **Cardio doesn't appear on the radar.** Correct for a muscle-coverage chart,
    but it does mean the radar and the balance marker tell partly disjoint
    stories, and the Stats page has to make that legible.

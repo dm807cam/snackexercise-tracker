@@ -46,6 +46,12 @@ export function TodayGoal({ goal }: { goal: DailyGoal }) {
             // by a factor of two in both directions depending on the movement.
             hint={null}
           />
+          {/* Both remainders are shown to a tenth rather than rounded to a whole
+              number. `met` is decided on the rounded-to-a-tenth remainder, so a
+              day 0.4 MET-min short is genuinely not met — and printing it as a
+              whole number put "0 MET-min to go" beside an unticked label and an
+              open ring, which is the exact contradiction side()'s rounding rule
+              exists to prevent. */}
           <Row
             colour="var(--cardio)"
             label="Cardio"
@@ -53,7 +59,7 @@ export function TodayGoal({ goal }: { goal: DailyGoal }) {
             value={
               goal.cardio.met
                 ? `${Math.round(goal.cardio.done)} of ${Math.round(goal.cardio.target)} MET-min`
-                : `${Math.round(goal.cardio.remaining)} MET-min to go`
+                : `${formatSets(goal.cardio.remaining)} MET-min to go`
             }
             hint={
               goal.cardio.met ? null : minutes > 0 ? `about ${minutes} min` : "almost there"
@@ -169,6 +175,6 @@ function describe(goal: DailyGoal): string {
     : `${formatSets(goal.strength.remaining)} sets still to go`;
   const cardio = goal.cardio.met
     ? "cardio target met"
-    : `${Math.round(goal.cardio.remaining)} MET-minutes still to go`;
+    : `${formatSets(goal.cardio.remaining)} MET-minutes still to go`;
   return `Today's targets: ${strength}; ${cardio}.`;
 }
