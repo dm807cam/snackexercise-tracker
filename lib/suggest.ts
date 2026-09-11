@@ -13,10 +13,17 @@
  *   whole premise of snack training is frequency, and because it is the number
  *   a person cannot hold in their head across twelve muscle groups.
  *
- *   DEFICIT — how thin that axis's weekly volume is against the best-served
- *   axis. Breaks the tie between two groups last trained the same day, and
- *   stops a group you touch daily with one stabiliser credit from looking
- *   permanently fine.
+ *   DEFICIT — how thin that axis's weekly volume is against WHAT IT NEEDS, from
+ *   the per-muscle hypertrophy target in lib/volume.ts. Breaks the tie between
+ *   two groups last trained the same day, and stops a group you touch daily
+ *   with one stabiliser credit from looking permanently fine.
+ *
+ * The deficit used to be measured against the user's own busiest axis, which
+ * was answerable for anyone but meant nothing: train everything equally badly
+ * and every axis scored a deficit of zero, because each one matched the
+ * yardstick. Train chest hard and hamstrings well, and hamstrings still read as
+ * badly deficient, because the yardstick was chest rather than what hamstrings
+ * need. An absolute reference answers both cases.
  *
  * Cardio competes as a thirteenth pseudo-axis on the same two terms, measured
  * against its own guideline, so a fortnight of lifting and no running produces
@@ -32,6 +39,7 @@ import { CARDIO_TARGET_MET_MIN_PER_WEEK } from "./cardio";
 import { type AxisSlug, axisLabel } from "./muscles";
 import type { AxisStat } from "./scoring";
 import { DEFAULT_ACTIVE_WINDOW, TARGET_BOUTS, formatGap, type ActiveWindow } from "./spacing";
+import { volumeDeficit } from "./volume";
 
 /** Days after which an axis is as stale as it is going to get, for scoring. */
 const STALE_CAP = 10;
@@ -46,6 +54,8 @@ export interface SuggestionCandidate {
   score: number;
   daysSince: number | null;
   perWeek: number;
+  /** What that axis should be getting per week — its own target, not a rival's. */
+  target: number;
 }
 
 export interface ExerciseChoice {
@@ -76,30 +86,26 @@ export function rankAxes(params: {
 }): SuggestionCandidate[] {
   const { axes, daysSinceCardio, cardioMetMinutesPerWeek } = params;
 
-  // The busiest axis is the yardstick, not a fixed number: this asks "what is
-  // falling behind the rest of your training", which is answerable for someone
-  // training twice a week and someone training twice a day alike.
-  const busiest = Math.max(0, ...axes.map((a) => a.perWeek));
-
   const candidates: SuggestionCandidate[] = axes.map((axis) => ({
     axis: axis.axis,
     label: axisLabel(axis.axis),
     daysSince: axis.daysSinceTrained,
     perWeek: axis.perWeek,
-    score: scoreOf(
-      axis.daysSinceTrained,
-      busiest > 0 ? 1 - axis.perWeek / busiest : 1,
-    ),
+    target: axis.targetPerWeek,
+    score: scoreOf(axis.daysSinceTrained, volumeDeficit(axis.perWeek, axis.targetPerWeek)),
   }));
 
+  // Cardio was always scored this way — against its own guideline rather than
+  // against the other axes. The strength side has simply caught up.
   candidates.push({
     axis: null,
     label: "Cardio",
     daysSince: daysSinceCardio,
     perWeek: cardioMetMinutesPerWeek,
+    target: CARDIO_TARGET_MET_MIN_PER_WEEK,
     score: scoreOf(
       daysSinceCardio,
-      1 - Math.min(1, Math.max(0, cardioMetMinutesPerWeek / CARDIO_TARGET_MET_MIN_PER_WEEK)),
+      volumeDeficit(cardioMetMinutesPerWeek, CARDIO_TARGET_MET_MIN_PER_WEEK),
     ),
   });
 
@@ -224,9 +230,16 @@ export function buildSuggestion(params: {
 
 function reasonFor(candidate: SuggestionCandidate): string {
   if (candidate.daysSince === null) return "not trained in the log yet";
-  if (candidate.daysSince === 0) return "least volume this window";
   if (candidate.daysSince === 1) return "1 day since you trained it";
-  return `${candidate.daysSince} days since you trained it`;
+  if (candidate.daysSince > 1) return `${candidate.daysSince} days since you trained it`;
+
+  // Trained today, and still the pick — which now means a real shortfall
+  // against its own target rather than merely less than some other axis. The
+  // old wording, "least volume this window", was true of something on every
+  // possible log, including one where everything was already on target.
+  return volumeDeficit(candidate.perWeek, candidate.target) > 0
+    ? "below its weekly volume target"
+    : "trained today, and on target";
 }
 
 function round3(value: number): number {

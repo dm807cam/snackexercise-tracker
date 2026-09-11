@@ -155,4 +155,9 @@ export const settingsSchema = z.object({
    */
   dayStartHour: z.string().max(2).optional(),
   dayEndHour: z.string().max(2).optional(),
+  /**
+   * Hard sets per muscle per week to aim at — the radar's absolute reference.
+   * Empty means the literature default; see lib/volume.ts.
+   */
+  perMuscleTarget: z.string().max(3).optional(),
 });

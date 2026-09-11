@@ -49,6 +49,13 @@ standard way of counting hypertrophy volume, and it still works when you didn't
 record a weight — which, logging one-handed on the way back upstairs, is most of
 the time. Tonnage is shown alongside wherever weights exist, never guessed.
 
+The radar carries a **target ring** at 10 hard sets per muscle per week — where
+the hypertrophy dose–response is clearly established — and a fainter one at 20,
+where it has flattened. Without an absolute reference the chart scaled every
+spoke by the largest spoke, so a uniformly under-trained log drew a full, even
+polygon and nothing in the app disagreed. The target is configurable in
+Settings; see [ADR 0017](./docs/adr/0017-the-radar-is-read-against-an-absolute-target.md).
+
 Radar values are normalised to **effective sets per week**, so a 7-day window
 and a 180-day window are directly comparable rather than the longer one always
 looking like a triumph.
