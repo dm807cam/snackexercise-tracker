@@ -72,6 +72,12 @@ export interface Suggestion {
   alternatives: SuggestionCandidate[];
   /** A concrete movement from the catalogue, when one fits. */
   exercise: { id: string; name: string } | null;
+  /**
+   * The movement this one replaced, when the pick was upgraded because the
+   * obvious choice has stopped progressing. Shown so the bar explains itself
+   * rather than quietly proposing something harder than what was asked for.
+   */
+  progressedFrom: string | null;
   /** Why this one — shown verbatim, so the bar never asks to be trusted blindly. */
   reason: string;
   /** Timing nudge for today, from the spacing metric. Null when it has nothing to say. */
@@ -214,18 +220,88 @@ export function buildSuggestion(params: {
   recentIds: readonly string[];
   axisOf: (muscle: string) => AxisSlug | undefined;
   now?: SpacingNow;
+  /** Per-movement progression, so a stalled pick can be upgraded. */
+  progress?: readonly StalledMovement[];
 }): Suggestion {
   const ranked = rankAxes(params);
   const primary = ranked[0];
-  const exercise = chooseExercise(primary.axis, params.exercises, params.recentIds, params.axisOf);
+  const chosen = chooseExercise(primary.axis, params.exercises, params.recentIds, params.axisOf);
+
+  const upgraded = progressionUpgrade(
+    primary.axis,
+    chosen,
+    params.exercises,
+    params.progress ?? [],
+    params.axisOf,
+  );
+  const exercise = upgraded ?? chosen;
 
   return {
     primary,
     alternatives: ranked.slice(1, 3),
     exercise: exercise ? { id: exercise.id, name: exercise.name } : null,
-    reason: reasonFor(primary),
+    progressedFrom: upgraded && chosen ? chosen.name : null,
+    reason: upgraded && chosen ? `${chosen.name} has not moved in weeks` : reasonFor(primary),
     nudge: params.now ? spacingNudge(params.now) : null,
   };
+}
+
+/** The subset of a movement's progression this module needs. */
+export interface StalledMovement {
+  exerciseId: string;
+  stalled: boolean;
+  /** Catalogue slug of the next rung, when there is one. */
+  nextStep: string | null;
+}
+
+/**
+ * How much of the chosen movement's service to the ranked axis the rung above
+ * has to retain.
+ *
+ * A ladder climbs in difficulty, and difficulty often comes from shifting
+ * emphasis: a push-up is chest 1.0 and a diamond push-up chest 0.5, which is
+ * still unambiguously a chest movement. A dead hang is forearms 1.0 and a
+ * pull-up forearms 0.25, which is not — upgrading there would answer a forearms
+ * deficit with a back movement while the bar went on naming forearms. Half is
+ * the line between the two.
+ */
+const UPGRADE_AXIS_RETENTION = 0.5;
+
+/**
+ * Swap a stalled pick for the next rung up the ladder.
+ *
+ * The case this exists for: a fixed-load movement cannot progress by adding
+ * weight, so "do push-ups again" is the wrong suggestion for someone who has
+ * done 3 x 10 push-ups every week for two months. The next variation is the
+ * progression, and the catalogue already contains the ladder — it just was not
+ * written down anywhere until lib/progression.ts.
+ *
+ * Conservative on purpose. It fires only when the movement is actually stalled,
+ * only when the rung above is in the user's own catalogue, only when that rung
+ * still serves the axis the suggestion is about, and the bar says what it did
+ * and why — a suggestion that silently proposes something harder than what was
+ * asked for is the app overreaching.
+ */
+function progressionUpgrade(
+  axis: AxisSlug | null,
+  chosen: ExerciseChoice | null,
+  exercises: readonly ExerciseChoice[],
+  progress: readonly StalledMovement[],
+  axisOf: (muscle: string) => AxisSlug | undefined,
+): ExerciseChoice | null {
+  // Cardio has no ladder, and "the axis" is not a muscle group there anyway.
+  if (!chosen || axis === null) return null;
+
+  const stall = progress.find((p) => p.exerciseId === chosen.id);
+  if (!stall?.stalled || !stall.nextStep) return null;
+
+  const rung = exercises.find((e) => e.slug === stall.nextStep);
+  if (!rung) return null;
+
+  const serves = (exercise: ExerciseChoice) =>
+    exercise.muscles.reduce((sum, m) => (axisOf(m.muscle) === axis ? sum + m.weight : sum), 0);
+
+  return serves(rung) >= serves(chosen) * UPGRADE_AXIS_RETENTION ? rung : null;
 }
 
 function reasonFor(candidate: SuggestionCandidate): string {

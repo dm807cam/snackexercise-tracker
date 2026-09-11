@@ -131,6 +131,20 @@ over the window with a histogram of which hours your training actually lands in.
 Set your waking hours under Settings — scoring a night-shift worker's 22:00
 session as badly timed would just make the number something to ignore.
 
+### Getting stronger?
+
+Everything else on the stats page is a *coverage* measure. This one is not: per
+movement, the **best single set** of each day over the last six months —
+estimated 1RM where there is load, best-set reps where the load is fixed,
+longest hold for a plank — and how long the best has stood.
+
+A movement trained six or more times over four or more weeks without its best
+moving is marked **stalled**, appears in "needs attention", and, where the
+catalogue has a harder variation, the suggestion bar proposes the next rung
+instead (push-up → diamond push-up → dip) and says why. A fixed-load movement
+cannot progress by adding weight, so the next variation *is* the progression.
+See [ADR 0018](./docs/adr/0018-progression-is-a-per-movement-best-set.md).
+
 ### How much is left today
 
 The day opens with two rings: outer for strength, inner for cardio, each closing

@@ -6,6 +6,7 @@ import { axisLabel } from "@/lib/muscles";
 import { formatSets } from "@/lib/format";
 import { isBelowTargetVolume } from "@/lib/volume";
 import { MuscleRadar } from "./MuscleRadar";
+import { ProgressList, type ProgressPayload } from "./ProgressList";
 import { BalanceGradient, type BalancePayload } from "./BalanceGradient";
 import { SpacingCard, type SpacingPayload } from "./SpacingCard";
 
@@ -59,6 +60,8 @@ export interface StatsPayload {
   spacing: SpacingPayload;
   /** Hard sets per muscle per week the targets above are built from. */
   perMuscleTarget: number;
+  /** Per-movement progression, over its own longer window. */
+  progress: ProgressPayload[];
 }
 
 /**
@@ -121,6 +124,7 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
     );
 
   const showCardioRow = stats.daysSinceCardio === null || stats.daysSinceCardio >= 5;
+  const stalled = stats.progress.filter((p) => p.stalled);
 
   return (
     <div className="pb-4">
@@ -214,12 +218,12 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           </p>
         )}
 
-        {(neglected.length > 0 || showCardioRow) && (
+        {(neglected.length > 0 || showCardioRow || stalled.length > 0) && (
           <section className="mt-6">
             <h2 className="mb-2 text-sm font-semibold">Needs attention</h2>
             <p className="mb-2 text-xs text-dim">
-              Longest since you last trained these, or furthest below {stats.perMuscleTarget} hard
-              sets per muscle per week.
+              Longest since you last trained these, furthest below {stats.perMuscleTarget} hard sets
+              per muscle per week, or stopped moving.
             </p>
             <ul className="flex flex-col gap-2">
               {/* Cardio has no radar spoke — the radar is muscle coverage — but
@@ -242,6 +246,28 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
                   </span>
                 </li>
               )}
+              {/* A stalled movement is the third reason something needs
+                  attention, and the only one that is about a specific
+                  movement rather than a muscle group. Capped at two so the
+                  list stays a list rather than becoming the page. */}
+              {stalled.slice(0, 2).map((row) => (
+                <li
+                  key={row.exerciseId}
+                  className="surface flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: "var(--danger)" }}
+                    />
+                    <span className="truncate">{row.name}</span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-dim">
+                    {row.weeksFlat}w flat
+                  </span>
+                </li>
+              ))}
               {neglected.slice(0, 6).map((stat) => (
                 <li
                   key={stat.axis}
@@ -273,6 +299,19 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
             </ul>
           </section>
         )}
+
+        <section className="mt-6">
+          <h2 className="mb-2 text-sm font-semibold">Getting stronger?</h2>
+          {/* Deliberately not scoped to the window tabs above. A stall is
+              defined in weeks of unchanged best, so a seven-day view could
+              never show one, and a progression signal that disappeared when
+              you looked at a shorter window would be worse than none. */}
+          <p className="mb-2 text-xs text-dim">
+            Best set per movement over the last six months, whichever window is selected above. Tap
+            one for its history.
+          </p>
+          <ProgressList progress={stats.progress} />
+        </section>
 
         <section className="mt-6">
           <h2 className="mb-2 text-sm font-semibold">All muscle groups</h2>

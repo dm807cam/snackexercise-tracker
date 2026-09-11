@@ -26,6 +26,7 @@ accident.
 | [0015](./0015-effort-scales-effective-sets.md) | Effort scales effective sets; an unrated set counts as a hard one | Accepted |
 | [0016](./0016-the-scalar-dose-is-hard-sets.md) | The scalar strength dose is hard sets, not summed effective sets | Accepted, amends 0005 |
 | [0017](./0017-the-radar-is-read-against-an-absolute-target.md) | Volume is read against an absolute per-muscle target, not the user's best spoke | Accepted |
+| [0018](./0018-progression-is-a-per-movement-best-set.md) | Progression is a per-movement best set; a stall is weeks without one moving | Accepted |
 
 ## Format
 
