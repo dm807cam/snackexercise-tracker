@@ -169,6 +169,7 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
           data={stats.axes}
           showPrevious={showPrevious}
           perMuscleTarget={stats.perMuscleTarget}
+          targets={stats.targets}
         />
 
         <label className="mt-1 flex items-center justify-center gap-2 text-xs text-dim">

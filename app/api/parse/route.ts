@@ -35,6 +35,8 @@ export interface ProposedEntry {
   suggestedMets: number | null;
   /** True once the entry is known to be at least partly cardio. */
   isCardio: boolean;
+  /** How aerobic it is, 0..1 — decides whether an effort rating applies. */
+  cardioBias: number;
 }
 
 /**
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
         suggestedCardioBias,
         suggestedMets,
         isCardio: (matched?.cardioBias ?? suggestedCardioBias ?? 0) > 0,
+        cardioBias: matched?.cardioBias ?? suggestedCardioBias ?? 0,
       });
     }
 

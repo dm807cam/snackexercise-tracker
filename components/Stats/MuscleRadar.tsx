@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { axisShortLabel } from "@/lib/muscles";
 import { UPPER_BAND_MULTIPLE, radarScale } from "@/lib/volume";
+import { metMinutesPerEffectiveSet, type Targets } from "@/lib/targets";
 
 export interface RadarDatum {
   axis: string;
@@ -27,10 +28,11 @@ export interface RadarDatum {
  * Muscle coverage, in two colours.
  *
  * BLUE is resistance work in effective sets per week. ORANGE is the aerobic
- * load the same muscles absorbed, converted onto the same scale by the
- * guideline exchange rate in lib/balance.ts (600 MET-minutes of cardio and 60
- * effective sets of strength are each one guideline-week, so ten MET-minutes
- * plot as far out as one effective set).
+ * load the same muscles absorbed, converted onto the same scale by the exchange
+ * rate in lib/targets.ts: a week of each side's target is the same distance, so
+ * the MET-minutes that reach as far as one effective set depend on what the
+ * user is aiming at. At the guideline default that is about ten; at the
+ * longevity preset, about twenty.
  *
  * The two are drawn as separate lines and never stacked or summed. That is the
  * whole point: a 10 km run genuinely loads the calves and quads, and a chart
@@ -67,11 +69,18 @@ export function MuscleRadar({
   data,
   showPrevious,
   perMuscleTarget,
+  targets,
 }: {
   data: RadarDatum[];
   showPrevious: boolean;
   /** Hard sets per muscle per week the band is built from, for the legend. */
   perMuscleTarget: number;
+  /**
+   * The weekly doses the cardio series was converted against. Needed for the
+   * caption: the rate moves with the cardio target, so a hardcoded "ten
+   * MET-minutes" is wrong by 2x for anyone on the longevity preset.
+   */
+  targets: Targets;
 }) {
   const shaped = data.map((d) => ({
     label: axisShortLabel(d.axis),
@@ -200,7 +209,9 @@ export function MuscleRadar({
         looks; it flattens by about {perMuscleTarget * UPPER_BAND_MULTIPLE}
         {showUpper ? ", the fainter ring outside" : ""}.
         {hasCardio &&
-          " Both lines are on the effective-set scale — 10 cardio MET-minutes reach as far as one effective set, the same exchange rate the balance bar uses. They are never added together."}
+          ` Both lines are on the effective-set scale — ${Math.round(
+            metMinutesPerEffectiveSet(targets),
+          )} cardio MET-minutes reach as far as one effective set, the same exchange rate the balance bar uses. They are never added together.`}
       </p>
     </div>
   );

@@ -76,10 +76,10 @@ movement's typical cost. Steps count too, above a baseline and at half weight by
 default, with the steps from a logged run subtracted so your phone doesn't count
 the same run twice.
 
-The marker itself measures each side against **its own weekly guideline** — 60
-effective sets, 600 MET-minutes — and shows cardio's share of the total. That
-normalisation is the point: the middle means *on target for both*, not that two
-incompatible units happened to tie. It is drawn as a band rather than a needle,
+The marker itself measures each side against **its own weekly target** —
+about 27 hard sets and 600 MET-minutes by default, both configurable — and shows
+cardio's share of the total. That normalisation is the point: the middle means
+*on target for both*, not that two incompatible units happened to tie. It is drawn as a band rather than a needle,
 because the width is real, and it disappears entirely when there is too little
 logged to say anything honest.
 
@@ -91,9 +91,10 @@ Cardio stays out of the effective-set total, but not out of sight. It travels as
 a second channel in the same per-muscle shape — an outline on the body map, its
 own orange line on the radar — so a 10 km run shows up on the calves it actually
 loaded. The two are drawn separately and never added: the radar puts them on one
-radial scale using the same exchange rate the calendar uses (600 MET-minutes and
-60 effective sets are each one guideline-week, so 10 MET-minutes reach as far as
-one effective set).
+radial scale using the same exchange rate the calendar uses — a week of each
+side's target is the same distance, so at the default about 10 MET-minutes reach
+as far as one effective set. Raise the cardio target and that rate moves with
+it, which is the honest answer to "how much of my target was that run".
 
 ### One colour, one quality
 

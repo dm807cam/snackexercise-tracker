@@ -67,6 +67,22 @@ export function effortMultiplier(effort: string | null | undefined): number {
   return isEffort(effort) ? MULTIPLIER[effort] : UNLABELLED_EFFORT_MULTIPLIER;
 }
 
+/**
+ * Whether a movement is worth asking about at all.
+ *
+ * Pure cardio has no proximity to failure to record, and its effective sets are
+ * zeroed everywhere, so a rating would change nothing. Anything with resistance
+ * work in it — a burpee at 0.5, a kettlebell swing at 0.4 — does.
+ *
+ * Shared by the manual form and the dictation confirm card, which previously
+ * disagreed: the confirm card hid the chips for any movement with ANY aerobic
+ * component while still submitting the model's inferred rating, so a burpee's
+ * rating was applied and could not be seen or corrected.
+ */
+export function ratesEffort(cardioBias: number | null | undefined): boolean {
+  return (cardioBias ?? 0) < 1;
+}
+
 export function effortLabel(effort: string | null | undefined): string {
   if (effort === "easy") return "Easy";
   if (effort === "hard") return "Hard";

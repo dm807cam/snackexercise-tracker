@@ -12,7 +12,7 @@ import {
   toMetres,
   type Units,
 } from "@/lib/format";
-import { EFFORT_LEVELS, effortLabel } from "@/lib/effort";
+import { EFFORT_LEVELS, effortLabel, ratesEffort } from "@/lib/effort";
 import { muscleLabel } from "@/lib/muscles";
 import { resolvePerformedAt } from "@/lib/parse-helpers";
 import type { LocalDate } from "@/lib/dates";
@@ -34,6 +34,7 @@ interface Proposal {
   suggestedCardioBias: number | null;
   suggestedMets: number | null;
   isCardio: boolean;
+  cardioBias: number;
 }
 
 const EXAMPLES = [
@@ -345,9 +346,11 @@ function ProposalCard({
         "Nothing is stored until you confirm" has to mean every field: an effort
         rating changes what the set is worth, and one heard out of "that was easy
         to get to" would otherwise be saved with no way to see or undo it here.
-        Not offered for cardio, which is never rated.
+        Not offered for PURE cardio, which is never rated — but a burpee is,
+        and gating on "any aerobic component" hid the chips for one while
+        still submitting the rating.
       */}
-      {!proposal.isCardio && (
+      {ratesEffort(proposal.cardioBias) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
           {EFFORT_LEVELS.map((level) => {
             const active = proposal.effort === level;

@@ -64,11 +64,23 @@ export function SettingsView({
   // save and left 12 in the database under a field reading 10.
   const [savedTarget, setSavedTarget] = useState(initial.perMuscleTarget);
   const [targets, setTargets] = useState(initial.targets);
+  // What is actually stored, for the same reason `savedTarget` above tracks it:
+  // `initial` only changes once the router refresh after a save lands, so a
+  // preset tap followed by typing the old number back inside that window would
+  // suppress the second save and leave the field and the database disagreeing.
+  const [savedTargets, setSavedTargets] = useState(initial.targets);
   const preset = presetFor(targets);
 
   function saveTargets(next: Targets) {
     const stored = normaliseTargets(next);
     setTargets(stored);
+    if (
+      stored.cardioMetMinutesPerWeek === savedTargets.cardioMetMinutesPerWeek &&
+      stored.strengthHardSetsPerWeek === savedTargets.strengthHardSetsPerWeek
+    ) {
+      return;
+    }
+    setSavedTargets(stored);
     save({
       cardioTarget: String(stored.cardioMetMinutesPerWeek),
       strengthTarget: String(stored.strengthHardSetsPerWeek),
@@ -365,10 +377,7 @@ export function SettingsView({
             onChange={(e) =>
               setTargets((t) => ({ ...t, cardioMetMinutesPerWeek: Number(e.target.value) }))
             }
-            onBlur={() =>
-              targets.cardioMetMinutesPerWeek !== initial.targets.cardioMetMinutesPerWeek &&
-              saveTargets(targets)
-            }
+            onBlur={() => saveTargets(targets)}
             className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
@@ -389,10 +398,7 @@ export function SettingsView({
             onChange={(e) =>
               setTargets((t) => ({ ...t, strengthHardSetsPerWeek: Number(e.target.value) }))
             }
-            onBlur={() =>
-              targets.strengthHardSetsPerWeek !== initial.targets.strengthHardSetsPerWeek &&
-              saveTargets(targets)
-            }
+            onBlur={() => saveTargets(targets)}
             className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
