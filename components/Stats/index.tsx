@@ -62,6 +62,8 @@ export interface StatsPayload {
   perMuscleTarget: number;
   /** Per-movement progression, over its own longer window. */
   progress: ProgressPayload[];
+  /** The weekly doses this window was measured against. */
+  targets: { cardioMetMinutesPerWeek: number; strengthHardSetsPerWeek: number };
 }
 
 /**

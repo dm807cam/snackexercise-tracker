@@ -41,6 +41,12 @@ and a rate throws that away — see ADR 6, which depends on this.
 
 ## The targets
 
+**Both targets are now configurable** — amended by
+[0019](./0019-targets-are-configurable-and-the-two-claims-are-separate.md). The
+figures below are the defaults, the exchange rate is derived from whatever the
+user sets, and the WHO floor is kept separate from the target so that raising
+your sights does not erase having met the guideline.
+
 - **600 MET-min/week** is the WHO's aerobic guideline, per ADR 4.
 - **~27 hard sets/week** is calibrated to this app's own scale, not lifted from
   a paper — consistent with "muscle-strengthening on 2+ days" and with ~10 sets

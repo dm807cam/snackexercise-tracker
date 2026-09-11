@@ -19,6 +19,7 @@ import {
 } from "@/lib/scoring";
 import type { AxisSlug } from "@/lib/muscles";
 import { buildBalance, effectiveSetEquivalents } from "@/lib/balance";
+import { GUIDELINE_TARGETS } from "@/lib/targets";
 import { summariseSpacing } from "@/lib/spacing";
 import { effortMultiplier } from "@/lib/effort";
 
@@ -459,14 +460,19 @@ describe("buildStats", () => {
       ...NO_CARDIO,
       // 400 MET-minutes, which is 40 effective-set-equivalents before the
       // muscle weighting takes its quarter.
-      cardioLoadFor: () => effectiveSetEquivalents(400),
+      cardioLoadFor: () => effectiveSetEquivalents(400, GUIDELINE_TARGETS),
     });
+
+    // Derived rather than written out: the exchange rate now moves with the
+    // user's cardio target, so a hardcoded 10 would pin a number that is only
+    // true of the default.
+    const expected = effectiveSetEquivalents(400, GUIDELINE_TARGETS) * 0.25;
 
     const calves = stats.axes.find((a) => a.axis === "calves")!;
     expect(calves.perWeek).toBe(0);
     expect(calves.total).toBe(0);
-    expect(calves.cardioTotal).toBe(10);
-    expect(calves.cardioPerWeek).toBe(10);
+    expect(calves.cardioTotal).toBeCloseTo(expected, 1);
+    expect(calves.cardioPerWeek).toBeCloseTo(expected, 1);
 
     // And nothing leaks onto an axis the run never touched.
     expect(stats.axes.find((a) => a.axis === "chest")!.cardioPerWeek).toBe(0);

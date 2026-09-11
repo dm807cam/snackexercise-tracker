@@ -39,6 +39,7 @@ import {
 } from "./cardio";
 import { buildBalance, effectiveSetEquivalents } from "./balance";
 import { normalisePerMuscleTarget } from "./volume";
+import { normaliseTargets, type Targets } from "./targets";
 import {
   PROGRESSION_MAX_CARDIO_BIAS,
   buildExerciseProgress,
@@ -130,12 +131,15 @@ export async function getDaySummary(
    */
   hardSets: number;
   spacing: SpacingResult;
+  /** The weekly doses the day's rings are a seventh of. */
+  targets: Targets;
 }> {
-  const [entries, steps, activeWindow, stepSettings] = await Promise.all([
+  const [entries, steps, activeWindow, stepSettings, targets] = await Promise.all([
     getEntriesForDate(date),
     getSteps(date),
     getActiveWindow(),
     getStepSettings(),
+    getTargets(),
   ]);
 
   const summary = summariseDay(date, entries);
@@ -155,6 +159,7 @@ export async function getDaySummary(
       entries.map((e) => minutesOfDayInZone(e.performedAt, timeZone)),
       activeWindow,
     ),
+    targets,
   };
 }
 
@@ -179,6 +184,22 @@ export async function getActiveWindow(): Promise<ActiveWindow> {
     : DEFAULT_ACTIVE_WINDOW.endHour;
 
   return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
+}
+
+/**
+ * The weekly doses each side is measured against.
+ *
+ * Configurable for the reason the step baseline and the active window are: the
+ * defaults are the public-health guideline, and someone whose stated aim is the
+ * mortality optimum should be able to say so and have every ring, marker and
+ * exchange rate in the app move with them. See lib/targets.ts.
+ */
+export async function getTargets(): Promise<Targets> {
+  const settings = await getSettings();
+  return normaliseTargets({
+    cardioMetMinutesPerWeek: Number(settings.cardioTarget),
+    strengthHardSetsPerWeek: Number(settings.strengthTarget),
+  });
 }
 
 /**
@@ -225,10 +246,11 @@ export async function getDailyLoad(
   start: LocalDate,
   end: LocalDate,
 ): Promise<Record<LocalDate, DayLoad>> {
-  const [entries, stepsByDate, stepSettings] = await Promise.all([
+  const [entries, stepsByDate, stepSettings, targets] = await Promise.all([
     getEntriesInRange(start, end),
     getStepsInRange(start, end),
     getStepSettings(),
+    getTargets(),
   ]);
 
   const byDay: Record<string, DayLoad> = {};
@@ -258,7 +280,7 @@ export async function getDailyLoad(
 
     // A day at the weekly guideline pace for both qualities scores the same as
     // a day of (target / 7) effective sets did before cardio existed.
-    const cardio = effectiveSetEquivalents(metMinutes);
+    const cardio = effectiveSetEquivalents(metMinutes, targets);
     const total = effectiveSets + cardio;
 
     if (total > 0) {
@@ -540,6 +562,7 @@ export async function loadStats(
     activeWindow,
     perMuscleTarget,
     progress,
+    targets,
   ] = await Promise.all([
     getEntriesInRange(current.start, current.end),
     comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
@@ -553,6 +576,7 @@ export async function loadStats(
     // weeks by a seven-day window. So progression always looks back far enough
     // to see one, whatever window the user is reading the rest of the page on.
     getExerciseProgress(addDays(today, -(PROGRESS_WINDOW_DAYS - 1)), today, today),
+    getTargets(),
   ]);
 
   const balance = buildBalance({
@@ -560,6 +584,7 @@ export async function loadStats(
     entries: currentEntries,
     stepsByDate: steps,
     stepSettings,
+    targets,
   });
 
   const minutesByDate = new Map<string, number[]>();
@@ -592,7 +617,8 @@ export async function loadStats(
     // The radar's second series: MET-minutes carried onto the effective-set
     // scale by the balance module's guideline exchange rate. Converted here,
     // once, so the chart never has to know either currency.
-    cardioLoadFor: (entry) => effectiveSetEquivalents(entryMetMinutes(entry)),
+    cardioLoadFor: (entry) => effectiveSetEquivalents(entryMetMinutes(entry), targets),
+    targets,
   });
 }
 

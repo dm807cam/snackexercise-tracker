@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  CARDIO_TARGET_MET_MIN_PER_DAY,
-  STRENGTH_TARGET_PER_DAY,
+  CARDIO_GUIDELINE_FLOOR_PER_DAY,
   buildDailyGoal,
+  dailyTargets,
   goalHeadline,
   remainingCardioMinutes,
 } from "@/lib/daily-goal";
-import { CARDIO_TARGET_MET_MIN_PER_WEEK } from "@/lib/cardio";
-import { STRENGTH_TARGET_HARD_SETS_PER_WEEK } from "@/lib/balance";
+import { GUIDELINE_TARGETS, LONGEVITY_TARGETS } from "@/lib/targets";
+
+const { strength: STRENGTH_TARGET_PER_DAY, cardio: CARDIO_TARGET_MET_MIN_PER_DAY } =
+  dailyTargets();
 
 const nothing = { hardSets: 0, metMinutes: 0 };
 
@@ -15,8 +17,11 @@ describe("the daily targets", () => {
   it("are a seventh of the weekly guidelines, derived rather than restated", () => {
     // The one thing that must never drift: if a weekly target is ever edited,
     // the day view has to move with it rather than keep its own copy.
-    expect(STRENGTH_TARGET_PER_DAY).toBeCloseTo(STRENGTH_TARGET_HARD_SETS_PER_WEEK / 7, 10);
-    expect(CARDIO_TARGET_MET_MIN_PER_DAY).toBeCloseTo(CARDIO_TARGET_MET_MIN_PER_WEEK / 7, 10);
+    expect(STRENGTH_TARGET_PER_DAY).toBeCloseTo(GUIDELINE_TARGETS.strengthHardSetsPerWeek / 7, 10);
+    expect(CARDIO_TARGET_MET_MIN_PER_DAY).toBeCloseTo(
+      GUIDELINE_TARGETS.cardioMetMinutesPerWeek / 7,
+      10,
+    );
   });
 });
 
@@ -146,5 +151,54 @@ describe("goalHeadline", () => {
         }),
       ),
     ).toBe("Both targets met today");
+  });
+});
+
+describe("configurable targets", () => {
+  it("takes a seventh of whatever the user is aiming at", () => {
+    const perDay = dailyTargets(LONGEVITY_TARGETS);
+    expect(perDay.cardio).toBeCloseTo(LONGEVITY_TARGETS.cardioMetMinutesPerWeek / 7, 10);
+
+    // The longevity preset raises cardio and leaves strength alone, because the
+    // mortality-optimal resistance dose is LOWER than the hypertrophy one —
+    // moving it would be moving away from the app's stated goal.
+    expect(perDay.strength).toBe(dailyTargets(GUIDELINE_TARGETS).strength);
+  });
+
+  it("does not close the cardio ring at the guideline when aiming past it", () => {
+    const goal = buildDailyGoal({
+      hardSets: 0,
+      metMinutes: GUIDELINE_TARGETS.cardioMetMinutesPerWeek / 7,
+      targets: LONGEVITY_TARGETS,
+    });
+    expect(goal.cardio.met).toBe(false);
+    expect(goal.cardioGuidelineMet).toBe(true);
+  });
+
+  it("still says the guideline was passed, rather than only that the target was not", () => {
+    // Raising your sights must not erase the achievement of meeting the
+    // public-health minimum: two claims, never averaged into one.
+    const goal = buildDailyGoal({
+      hardSets: 0,
+      metMinutes: CARDIO_GUIDELINE_FLOOR_PER_DAY,
+      targets: LONGEVITY_TARGETS,
+    });
+    expect(goalHeadline(goal)).toBe("Past the activity guideline — still short of your target");
+  });
+
+  it("marks the guideline on the ring only when it is somewhere short of the target", () => {
+    expect(
+      buildDailyGoal({ hardSets: 0, metMinutes: 0, targets: GUIDELINE_TARGETS })
+        .cardioGuidelineFraction,
+    ).toBe(1);
+
+    const raised = buildDailyGoal({ hardSets: 0, metMinutes: 0, targets: LONGEVITY_TARGETS });
+    expect(raised.cardioGuidelineFraction).toBeCloseTo(0.5, 2);
+  });
+
+  it("keeps the default behaviour when no targets are given", () => {
+    const goal = buildDailyGoal({ hardSets: 0, metMinutes: 0 });
+    expect(goal.cardio.target).toBeCloseTo(GUIDELINE_TARGETS.cardioMetMinutesPerWeek / 7, 1);
+    expect(goal.cardioGuidelineFraction).toBe(1);
   });
 });

@@ -14,7 +14,6 @@
  */
 
 import {
-  CARDIO_TARGET_MET_MIN_PER_WEEK,
   entryMetMinutes,
   impliedStepsFromEntries,
   stepMetMinutes,
@@ -23,49 +22,21 @@ import {
 } from "./cardio";
 import type { LocalDate } from "./dates";
 import { entryEffectiveSets, entryHardSets } from "./scoring";
+import { GUIDELINE_TARGETS as DEFAULT_TARGETS, type Targets as TargetsInput } from "./targets";
 
 /**
- * The reference point of the EFFECTIVE-SET SCALE — the per-muscle-summed
- * quantity the radar, the body map and the calendar are drawn against.
- *
- * Not a dose target. Because a set credits 1.0 / 0.5 / 0.25 across the muscles
- * it trains, the number of effective sets a single hard set generates depends
- * entirely on which movement it was: 1.0 for a triceps extension, 4.25 for a
- * deadlift. Summed into one number that fan-out is an artefact of movement
- * selection, so the dose is measured in hard sets — see
- * STRENGTH_TARGET_HARD_SETS_PER_WEEK below — and this constant survives only to
- * say how far out a line should be drawn.
+ * The weekly targets each side is measured against are no longer constants —
+ * they are configurable, with the guideline values as the default. See
+ * lib/targets.ts, which also explains why raising the cardio target moves the
+ * radar's and the calendar's exchange rate with it.
  */
-export const STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK = 60;
-
-/**
- * Effective sets one hard set generates, averaged across the catalogue.
- *
- * A property of the DRAWING SCALE and of nothing else. It is close to the
- * catalogue's mean fan-out (~2.0 over the 73 non-pure-cardio movements) but is
- * deliberately a fixed number rather than one computed from the catalogue: the
- * muscle weightings are editable in Settings, and a scale that moved whenever
- * someone adjusted a row would silently restate every past week.
- */
-export const EFFECTIVE_SETS_PER_HARD_SET = 2.2;
-
-/**
- * HARD SETS per week that count as meeting the strength guideline — the actual
- * strength dose target, and the number the ring, the marker and the day view
- * are all measured against.
- *
- * ~27 a week. Consistent with the WHO's "muscle-strengthening on 2 or more
- * days" and with the hypertrophy literature's ~10 sets per muscle group per
- * week across the major groups. Derived from the drawing scale above so the two
- * cannot drift, but unlike the old effective-set target it does not move when
- * the muscle weightings are edited, because hard sets do not depend on them.
- *
- * It assumes a logged set is a hard set, which is exactly what an unrated set
- * is counted as (lib/effort.ts). Rating sets as `easy` lowers the dose against
- * an unchanged target, which is the point of rating them.
- */
-export const STRENGTH_TARGET_HARD_SETS_PER_WEEK =
-  STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK / EFFECTIVE_SETS_PER_HARD_SET;
+export {
+  EFFECTIVE_SETS_PER_HARD_SET,
+  GUIDELINE_TARGETS,
+  effectiveSetEquivalents,
+  metMinutesPerEffectiveSet,
+  type Targets,
+} from "./targets";
 
 /**
  * Prior strength, in guideline-weeks of imaginary dose. Half a week, split
@@ -78,26 +49,6 @@ export const STRENGTH_TARGET_HARD_SETS_PER_WEEK =
  * data it sits at 0.5, and it washes out within a couple of logged weeks.
  */
 export const PRIOR_WEIGHT = 0.5;
-
-/**
- * MET-minutes that carry the same fraction of a weekly guideline as one
- * effective set — the app's one and only exchange rate between the two
- * currencies, derived from the two targets rather than invented beside them.
- *
- * It exists so that a chart can put both qualities on one radial scale without
- * ADDING them. Nothing here makes a run into resistance volume: effective sets
- * are still scaled by (1 - cardioBias) everywhere, and the two series stay
- * separate lines with separate colours. This constant only answers "how far out
- * should the cardio line be drawn", and it answers it the same way the calendar
- * already answers "how dark should this day be".
- */
-export const MET_MIN_PER_EFFECTIVE_SET =
-  CARDIO_TARGET_MET_MIN_PER_WEEK / STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK;
-
-/** MET-minutes expressed on the effective-set scale. Never added to real sets. */
-export function effectiveSetEquivalents(metMinutes: number): number {
-  return metMinutes / MET_MIN_PER_EFFECTIVE_SET;
-}
 
 export interface BalanceEntry extends CardioInput {
   id: string;
@@ -151,6 +102,11 @@ export interface BalanceResult {
    */
   confident: boolean;
   windowDays: number;
+  /**
+   * The targets this marker was placed against, carried so the breakdown can
+   * name them without importing a constant that is no longer the whole truth.
+   */
+  targets: TargetsInput;
 }
 
 /** Below this total dose the marker is not worth drawing. */
@@ -162,8 +118,10 @@ export function buildBalance(params: {
   /** Step counts for the days in the window, keyed by local date. */
   stepsByDate: Readonly<Record<string, number | null | undefined>>;
   stepSettings: StepSettings;
+  /** The weekly doses each side is measured against. Defaults to the guideline. */
+  targets?: TargetsInput;
 }): BalanceResult {
-  const { windowDays, entries, stepsByDate, stepSettings } = params;
+  const { windowDays, entries, stepsByDate, stepSettings, targets = DEFAULT_TARGETS } = params;
   const weeks = windowDays > 0 ? windowDays / 7 : 1;
 
   let hardSets = 0;
@@ -202,8 +160,8 @@ export function buildBalance(params: {
   // Window totals in guideline-weeks, deliberately not per-week rates: a
   // 180-day window at the same weekly pace as a 7-day one *should* be more
   // certain, and normalising to a rate would throw that information away.
-  const strengthDose = hardSets / STRENGTH_TARGET_HARD_SETS_PER_WEEK;
-  const cardioDose = metMinutes / CARDIO_TARGET_MET_MIN_PER_WEEK;
+  const strengthDose = hardSets / targets.strengthHardSetsPerWeek;
+  const cardioDose = metMinutes / targets.cardioMetMinutesPerWeek;
 
   const { cardioShare, uncertainty } = balanceFrom(strengthDose, cardioDose);
 
@@ -229,6 +187,7 @@ export function buildBalance(params: {
     },
     confident: strengthDose + cardioDose >= CONFIDENCE_FLOOR,
     windowDays,
+    targets,
   };
 }
 

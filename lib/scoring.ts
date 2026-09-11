@@ -36,6 +36,7 @@ import type { BalanceResult } from "./balance";
 import type { SpacingSummary } from "./spacing";
 import { effortBreakdown, effortMultiplier, type EffortBreakdown } from "./effort";
 import type { ExerciseProgress } from "./progression";
+import { GUIDELINE_TARGETS, type Targets } from "./targets";
 import {
   PER_MUSCLE_TARGET_SETS_PER_WEEK,
   UPPER_BAND_MULTIPLE,
@@ -321,6 +322,8 @@ export interface StatsResult {
    * Always over its own longer window; see PROGRESS_WINDOW_DAYS.
    */
   progress: ExerciseProgress[];
+  /** The weekly doses this window was measured against. */
+  targets: Targets;
 }
 
 /**
@@ -358,6 +361,8 @@ export function buildStats<T extends ScoredEntry>(params: {
   perMuscleTarget?: number;
   /** Per-movement progression, computed over its own window by the caller. */
   progress?: ExerciseProgress[];
+  /** The weekly doses each side is measured against. */
+  targets?: Targets;
 }): StatsResult {
   const {
     windowDays,
@@ -374,6 +379,7 @@ export function buildStats<T extends ScoredEntry>(params: {
     cardioLoadFor,
     perMuscleTarget = PER_MUSCLE_TARGET_SETS_PER_WEEK,
     progress = [],
+    targets = GUIDELINE_TARGETS,
   } = params;
 
   const currentAxes = rollUpToAxes(muscleEffectiveSets(current));
@@ -415,6 +421,7 @@ export function buildStats<T extends ScoredEntry>(params: {
     spacing,
     perMuscleTarget,
     progress,
+    targets,
   };
 }
 

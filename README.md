@@ -156,6 +156,14 @@ and ~86 MET-minutes a day, derived from the same constants the balance marker
 and the calendar use. Steps count toward cardio on the same terms the balance
 marker uses.
 
+Both weekly targets are **configurable** in Settings, defaulting to the
+public-health guideline. A "longevity" preset raises cardio to 1,200
+MET-minutes — the bottom of the band the large cohort studies put the lowest
+all-cause mortality in — and deliberately leaves strength alone, because the
+mortality-optimal resistance dose is *lower* than the hypertrophy one. The WHO
+minimum stays marked on the cardio ring whatever you aim at, so passing it is
+still visible. See [ADR 0019](./docs/adr/0019-targets-are-configurable-and-the-two-claims-are-separate.md).
+
 The strength side counts **hard sets** — one set counts once however many
 muscles the movement trains. Effective sets fan out across those muscles, which
 is right for the body map and the radar and wrong for a single daily number: it

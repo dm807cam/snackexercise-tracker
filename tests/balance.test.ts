@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   balanceFrom,
   buildBalance,
-  STRENGTH_TARGET_HARD_SETS_PER_WEEK,
   type BalanceEntry,
 } from "@/lib/balance";
+import { GUIDELINE_TARGETS, LONGEVITY_TARGETS } from "@/lib/targets";
+
+const STRENGTH_TARGET_HARD_SETS_PER_WEEK = GUIDELINE_TARGETS.strengthHardSetsPerWeek;
 import type { StepSettings } from "@/lib/cardio";
 import { addDays } from "@/lib/dates";
 
@@ -408,5 +410,52 @@ describe("buildBalance", () => {
     expect(cardio.index).toBeGreaterThan(0);
     expect(strength.index).toBeLessThan(0);
     expect(cardio.index).toBeCloseTo(2 * cardio.cardioShare - 1, 6);
+  });
+});
+
+describe("the targets are configurable", () => {
+  const lifting30 = [lifting(30)];
+
+  it("measures cardio against whatever the user set", () => {
+    const base = buildBalance({
+      windowDays: WINDOW,
+      entries: [...lifting30, running(3600, START)],
+      stepsByDate: {},
+      stepSettings: { mode: "off", baseline: 4000 },
+    });
+    const raised = buildBalance({
+      windowDays: WINDOW,
+      entries: [...lifting30, running(3600, START)],
+      stepsByDate: {},
+      stepSettings: { mode: "off", baseline: 4000 },
+      targets: LONGEVITY_TARGETS,
+    });
+
+    // Same run, twice the bar: the cardio dose halves and the marker swings
+    // toward strength. That is the point of the setting.
+    expect(raised.cardioDose).toBeCloseTo(base.cardioDose / 2, 5);
+    expect(raised.cardioShare).toBeLessThan(base.cardioShare);
+    expect(raised.strengthDose).toBeCloseTo(base.strengthDose, 10);
+  });
+
+  it("carries the targets it used, so the breakdown cannot name different ones", () => {
+    const result = buildBalance({
+      windowDays: WINDOW,
+      entries: lifting30,
+      stepsByDate: {},
+      stepSettings: { mode: "off", baseline: 4000 },
+      targets: LONGEVITY_TARGETS,
+    });
+    expect(result.targets).toEqual(LONGEVITY_TARGETS);
+  });
+
+  it("defaults to the guideline when none are given", () => {
+    const result = buildBalance({
+      windowDays: WINDOW,
+      entries: lifting30,
+      stepsByDate: {},
+      stepSettings: { mode: "off", baseline: 4000 },
+    });
+    expect(result.targets).toEqual(GUIDELINE_TARGETS);
   });
 });
