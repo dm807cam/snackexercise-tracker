@@ -51,6 +51,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       exercises,
       recentIds,
       axisOf: axisForMuscle,
+      progress: stats.progress,
       now: {
         nowMin: minutesOfDayInZone(new Date(), config.timeZone),
         boutMinutes: summary.spacing.boutMinutes,

@@ -22,7 +22,7 @@ export function NextUp({
   suggestion: Suggestion;
   onPick: (exerciseId: string | null) => void;
 }) {
-  const { primary, exercise, reason, nudge, alternatives } = suggestion;
+  const { primary, exercise, reason, nudge, alternatives, progressedFrom } = suggestion;
   const colour = primary.axis === null ? "var(--cardio)" : "var(--strength)";
 
   return (
@@ -64,6 +64,15 @@ export function NextUp({
           <path d="M9 5l7 7-7 7" />
         </svg>
       </button>
+
+      {/* An upgraded pick says so. Proposing something harder than the obvious
+          choice without explaining why would be the bar overreaching, and the
+          whole design of it is that its reasoning is always visible. */}
+      {progressedFrom && (
+        <p className="mt-1 px-1 text-[11px] text-dim">
+          a step up from {progressedFrom}, which has stopped moving
+        </p>
+      )}
 
       {alternatives.length > 0 && (
         <p className="mt-1 px-1 text-[11px] text-dim">

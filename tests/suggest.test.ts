@@ -32,7 +32,37 @@ function levelAxes(perWeek = 10): AxisStat[] {
   return AXES.map((a) => axis(a.slug, { perWeek, daysSinceTrained: 0 }));
 }
 
+/** Looked up by id rather than position — see the note on CATALOGUE below. */
+function fixture(id: string): ExerciseChoice {
+  const found = CATALOGUE.find((e) => e.id === id);
+  if (!found) throw new Error(`No fixture exercise "${id}"`);
+  return found;
+}
+
 const CATALOGUE: ExerciseChoice[] = [
+  // A ladder pair, so the progression upgrade has somewhere to climb to. The
+  // diamond variant is weighted lower on chest so it can never be picked by
+  // `chooseExercise` on merit — if it appears, the upgrade put it there.
+  {
+    id: "pushup",
+    name: "Push-up",
+    slug: "push-up",
+    cardioBias: 0,
+    muscles: [
+      { muscle: "chest", weight: 1 },
+      { muscle: "triceps", weight: 0.5 },
+    ],
+  },
+  {
+    id: "diamond",
+    name: "Diamond push-up",
+    slug: "diamond-push-up",
+    cardioBias: 0,
+    muscles: [
+      { muscle: "triceps", weight: 1 },
+      { muscle: "chest", weight: 0.5 },
+    ],
+  },
   {
     id: "pullup",
     name: "Pull-up",
@@ -143,8 +173,8 @@ describe("chooseExercise", () => {
 
   it("prefers a movement you actually use when two serve the axis equally", () => {
     const tied: ExerciseChoice[] = [
-      { ...CATALOGUE[1], id: "a", name: "A" },
-      { ...CATALOGUE[1], id: "b", name: "B" },
+      { ...fixture("row"), id: "a", name: "A" },
+      { ...fixture("row"), id: "b", name: "B" },
     ];
     expect(chooseExercise("back", tied, ["b"], axisForMuscle)?.id).toBe("b");
   });
@@ -152,7 +182,7 @@ describe("chooseExercise", () => {
   it("never answers a strength deficit with pure cardio", () => {
     // Run maps to quads, but its effective sets are zeroed everywhere else, so
     // suggesting it could not move the number the suggestion is about.
-    const choice = chooseExercise("quads", [CATALOGUE[3]], [], axisForMuscle);
+    const choice = chooseExercise("quads", [fixture("run")], [], axisForMuscle);
     expect(choice).toBeNull();
   });
 
@@ -294,5 +324,74 @@ describe("the deficit is measured against what an axis needs", () => {
     // "least volume this window" was true of something on every possible log,
     // including one where everything was already on target.
     expect(suggestion.reason).toBe("below its weekly volume target");
+  });
+});
+
+describe("a stalled pick is upgraded to the next rung", () => {
+  const stale = [axis("chest", { perWeek: 0, daysSinceTrained: 9 })];
+
+  it("proposes the harder variation, and says what it replaced", () => {
+    // A fixed-load movement cannot progress by adding weight, so "do push-ups
+    // again" is the wrong suggestion for someone who has done 3 x 10 every
+    // week for two months.
+    const suggestion = buildSuggestion({
+      axes: stale,
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+      exercises: CATALOGUE,
+      recentIds: [],
+      axisOf: axisForMuscle,
+      progress: [{ exerciseId: "pushup", stalled: true, nextStep: "diamond-push-up" }],
+    });
+
+    expect(suggestion.exercise?.name).toBe("Diamond push-up");
+    expect(suggestion.progressedFrom).toBe("Push-up");
+    expect(suggestion.reason).toContain("has not moved");
+  });
+
+  it("leaves a movement that is still progressing alone", () => {
+    const suggestion = buildSuggestion({
+      axes: stale,
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+      exercises: CATALOGUE,
+      recentIds: [],
+      axisOf: axisForMuscle,
+      progress: [{ exerciseId: "pushup", stalled: false, nextStep: "diamond-push-up" }],
+    });
+
+    expect(suggestion.exercise?.name).toBe("Push-up");
+    expect(suggestion.progressedFrom).toBeNull();
+  });
+
+  it("does not propose a rung the user does not have", () => {
+    // The ladder is catalogue knowledge; the user's catalogue is the user's.
+    const withoutDiamond = CATALOGUE.filter((e) => e.slug !== "diamond-push-up");
+    const suggestion = buildSuggestion({
+      axes: stale,
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+      exercises: withoutDiamond,
+      recentIds: [],
+      axisOf: axisForMuscle,
+      progress: [{ exerciseId: "pushup", stalled: true, nextStep: "diamond-push-up" }],
+    });
+
+    expect(suggestion.exercise?.name).toBe("Push-up");
+    expect(suggestion.progressedFrom).toBeNull();
+  });
+
+  it("behaves exactly as before when nothing knows about progression", () => {
+    const suggestion = buildSuggestion({
+      axes: stale,
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+      exercises: CATALOGUE,
+      recentIds: [],
+      axisOf: axisForMuscle,
+    });
+
+    expect(suggestion.progressedFrom).toBeNull();
+    expect(suggestion.reason).toBe("9 days since you trained it");
   });
 });

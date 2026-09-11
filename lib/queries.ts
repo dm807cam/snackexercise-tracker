@@ -40,6 +40,11 @@ import {
 import { buildBalance, effectiveSetEquivalents } from "./balance";
 import { normalisePerMuscleTarget } from "./volume";
 import {
+  buildExerciseProgress,
+  type ExerciseProgress,
+  type ProgressionEntry,
+} from "./progression";
+import {
   DEFAULT_ACTIVE_WINDOW,
   daySpacing,
   summariseSpacing,
@@ -318,6 +323,68 @@ export async function getStepSettings(today: LocalDate = todayLocalDate()): Prom
 }
 
 /**
+ * Per-movement progression over a window.
+ *
+ * One query for the whole window rather than one per movement: the progression
+ * maths is pure and needs nothing but the entries, so the only reason to touch
+ * the database twice would be to fetch the same rows again.
+ *
+ * Pure cardio is excluded. A run's progression is pace, which the app already
+ * shows on the entry itself, and an "estimated 1RM" for a 10 km run would be
+ * nonsense dressed as a number.
+ */
+export async function getExerciseProgress(
+  start: LocalDate,
+  end: LocalDate,
+): Promise<ExerciseProgress[]> {
+  const rows = await prisma.setEntry.findMany({
+    where: { localDate: { gte: start, lte: end }, exercise: { cardioBias: { lt: 1 } } },
+    select: {
+      localDate: true,
+      sets: true,
+      reps: true,
+      weightKg: true,
+      durationSec: true,
+      exercise: { select: { id: true, name: true, slug: true } },
+    },
+    orderBy: { localDate: "asc" },
+  });
+
+  const byExercise = new Map<
+    string,
+    { id: string; name: string; slug: string; entries: ProgressionEntry[] }
+  >();
+
+  for (const row of rows) {
+    let bucket = byExercise.get(row.exercise.id);
+    if (!bucket) {
+      bucket = { ...row.exercise, entries: [] };
+      byExercise.set(row.exercise.id, bucket);
+    }
+    bucket.entries.push({
+      localDate: row.localDate,
+      sets: row.sets,
+      reps: row.reps,
+      weightKg: row.weightKg,
+      durationSec: row.durationSec,
+    });
+  }
+
+  return [...byExercise.values()]
+    .map((exercise) => buildExerciseProgress(exercise))
+    .filter((progress): progress is ExerciseProgress => progress !== null)
+    // Stalled movements first — they are the reason this view exists — then by
+    // how much the user actually does the movement.
+    .sort(
+      (a, b) =>
+        Number(b.stalled) - Number(a.stalled) ||
+        b.weeksFlat - a.weeksFlat ||
+        b.sessions - a.sessions ||
+        a.name.localeCompare(b.name),
+    );
+}
+
+/**
  * Most recent date each radar axis was trained, looking back over the whole
  * log. This drives the "days since last trained" table, which for unstructured
  * training is the single most actionable number in the app.
@@ -458,6 +525,7 @@ export async function loadStats(
     stepSettings,
     activeWindow,
     perMuscleTarget,
+    progress,
   ] = await Promise.all([
     getEntriesInRange(current.start, current.end),
     comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
@@ -467,6 +535,10 @@ export async function loadStats(
     getStepSettings(today),
     getActiveWindow(),
     getPerMuscleTarget(),
+    // A stall is a slow signal: a movement cannot be shown as flat for nine
+    // weeks by a seven-day window. So progression always looks back far enough
+    // to see one, whatever window the user is reading the rest of the page on.
+    getExerciseProgress(addDays(today, -(PROGRESS_WINDOW_DAYS - 1)), today),
   ]);
 
   const balance = buildBalance({
@@ -502,12 +574,22 @@ export async function loadStats(
     daysWithSteps: Object.keys(steps).length,
     spacing,
     perMuscleTarget,
+    progress,
     // The radar's second series: MET-minutes carried onto the effective-set
     // scale by the balance module's guideline exchange rate. Converted here,
     // once, so the chart never has to know either currency.
     cardioLoadFor: (entry) => effectiveSetEquivalents(entryMetMinutes(entry)),
   });
 }
+
+/**
+ * How far back progression looks, regardless of the stats window.
+ *
+ * Six months. A stall is defined as weeks of training without the best set
+ * moving, so a seven-day window could never show one — and the whole point of
+ * the signal is that it is slower than everything else on the page.
+ */
+export const PROGRESS_WINDOW_DAYS = 180;
 
 export { addDays, daysBetween, enumerateDates, todayLocalDate };
 export { DEFAULT_STEP_BASELINE };

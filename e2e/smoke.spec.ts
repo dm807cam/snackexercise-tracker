@@ -396,3 +396,67 @@ test.describe("how hard it was", () => {
     await page.request.delete(`/api/days/${today}`);
   });
 });
+
+/**
+ * Progression is the one signal in this app that cannot be seen in a single
+ * day, so it is also the one most worth checking end to end: the query buckets
+ * by movement, the maths picks a metric and finds the stall, and the stats page
+ * has to surface it in two places at once.
+ */
+test.describe("getting stronger", () => {
+  test("a movement that has not moved in weeks is called out", async ({ page }) => {
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    const { exercises } = await (await page.request.get("/api/exercises")).json();
+    const pushUpId = exercises.find((e: { name: string }) => e.name === "Push-up")?.id;
+    expect(pushUpId).toBeTruthy();
+
+    // Eight weekly sessions, all identical. Enough sessions and enough weeks
+    // for a stall, and deliberately on past days so nothing here depends on —
+    // or disturbs — what today carries.
+    const dates: string[] = [];
+    for (let week = 8; week >= 1; week--) {
+      const day = new Date(`${today}T12:00:00Z`);
+      day.setUTCDate(day.getUTCDate() - week * 7);
+      dates.push(day.toISOString().slice(0, 10));
+    }
+
+    const created: string[] = [];
+    try {
+      for (const date of dates) {
+        const response = await page.request.post("/api/entries", {
+          data: {
+            exerciseId: pushUpId,
+            localDate: date,
+            performedTime: "12:00",
+            sets: 3,
+            reps: 10,
+          },
+        });
+        expect(response.ok()).toBe(true);
+        created.push((await response.json()).entries[0].id);
+      }
+
+      await page.goto("/stats");
+      await expect(page.getByRole("heading", { name: "Getting stronger?" })).toBeVisible();
+
+      // The sentence the whole feature exists to be able to say.
+      const row = page.getByRole("button", { name: /Push-up/ }).first();
+      await expect(row).toContainText(/for \d+ weeks, no change/);
+
+      // And it reaches the list the app already uses for "this wants doing
+      // something about", not only its own section.
+      await expect(
+        page.getByRole("listitem").filter({ hasText: "Push-up" }).filter({ hasText: /w flat/ }),
+      ).toBeVisible();
+
+      // Tapping it opens the history, newest first.
+      await row.click();
+      await expect(page.getByText("Best set", { exact: false }).first()).toBeVisible();
+      await expect(page.getByText(dates[dates.length - 1])).toBeVisible();
+    } finally {
+      for (const id of created) await page.request.delete(`/api/entries/${id}`);
+    }
+  });
+});

@@ -72,6 +72,12 @@ export interface Suggestion {
   alternatives: SuggestionCandidate[];
   /** A concrete movement from the catalogue, when one fits. */
   exercise: { id: string; name: string } | null;
+  /**
+   * The movement this one replaced, when the pick was upgraded because the
+   * obvious choice has stopped progressing. Shown so the bar explains itself
+   * rather than quietly proposing something harder than what was asked for.
+   */
+  progressedFrom: string | null;
   /** Why this one — shown verbatim, so the bar never asks to be trusted blindly. */
   reason: string;
   /** Timing nudge for today, from the spacing metric. Null when it has nothing to say. */
@@ -214,18 +220,59 @@ export function buildSuggestion(params: {
   recentIds: readonly string[];
   axisOf: (muscle: string) => AxisSlug | undefined;
   now?: SpacingNow;
+  /** Per-movement progression, so a stalled pick can be upgraded. */
+  progress?: readonly StalledMovement[];
 }): Suggestion {
   const ranked = rankAxes(params);
   const primary = ranked[0];
-  const exercise = chooseExercise(primary.axis, params.exercises, params.recentIds, params.axisOf);
+  const chosen = chooseExercise(primary.axis, params.exercises, params.recentIds, params.axisOf);
+
+  const upgraded = progressionUpgrade(chosen, params.exercises, params.progress ?? []);
+  const exercise = upgraded ?? chosen;
 
   return {
     primary,
     alternatives: ranked.slice(1, 3),
     exercise: exercise ? { id: exercise.id, name: exercise.name } : null,
-    reason: reasonFor(primary),
+    progressedFrom: upgraded && chosen ? chosen.name : null,
+    reason: upgraded && chosen ? `${chosen.name} has not moved in weeks` : reasonFor(primary),
     nudge: params.now ? spacingNudge(params.now) : null,
   };
+}
+
+/** The subset of a movement's progression this module needs. */
+export interface StalledMovement {
+  exerciseId: string;
+  stalled: boolean;
+  /** Catalogue slug of the next rung, when there is one. */
+  nextStep: string | null;
+}
+
+/**
+ * Swap a stalled pick for the next rung up the ladder.
+ *
+ * The case this exists for: a fixed-load movement cannot progress by adding
+ * weight, so "do push-ups again" is the wrong suggestion for someone who has
+ * done 3 x 10 push-ups every week for two months. The next variation is the
+ * progression, and the catalogue already contains the ladder — it just was not
+ * written down anywhere until lib/progression.ts.
+ *
+ * Conservative on purpose. It only fires when the movement is actually stalled,
+ * only when the rung above is in the user's own catalogue, and the bar says
+ * what it did and why — a suggestion that silently proposes something harder
+ * than what was asked for is the app overreaching.
+ */
+function progressionUpgrade(
+  chosen: ExerciseChoice | null,
+  exercises: readonly ExerciseChoice[],
+  progress: readonly StalledMovement[],
+): ExerciseChoice | null {
+  if (!chosen) return null;
+
+  const stall = progress.find((p) => p.exerciseId === chosen.id);
+  if (!stall?.stalled || !stall.nextStep) return null;
+
+  return exercises.find((e) => e.slug === stall.nextStep) ?? null;
 }
 
 function reasonFor(candidate: SuggestionCandidate): string {
