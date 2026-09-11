@@ -40,10 +40,28 @@ export interface StatsPayload {
     tonnageKg: number;
     activeDays: number;
     daysWithSteps: number;
+    /** How much of the window's volume carries an effort rating. */
+    effort: {
+      labelled: number;
+      unlabelled: number;
+      easy: number;
+      hard: number;
+      failure: number;
+      labelledFraction: number;
+    };
   };
   balance: BalancePayload;
   daysSinceCardio: number | null;
   spacing: SpacingPayload;
+}
+
+/**
+ * The displayed percentage, which is also what the line's own visibility is
+ * decided on. Rounding in one place and gating on the raw fraction in another
+ * let the line render "80% rated" while claiming to disappear at 80%.
+ */
+function ratedPercent(fraction: number): number {
+  return Math.round(fraction * 100);
 }
 
 export function StatsView({ initial }: { initial: StatsPayload }) {
@@ -157,6 +175,21 @@ export function StatsView({ initial }: { initial: StatsPayload }) {
             }
           />
         </dl>
+
+        {/*
+          Effective sets above count an unrated set as a hard one, which is the
+          right default but is still an assumption — and one that flatters a
+          user who never trains near failure. Saying how much of the volume was
+          actually rated is what keeps that honest. Once most sets carry a
+          rating the line stops being worth the space, so it goes away.
+        */}
+        {stats.totals.effort.unlabelled > 0 && ratedPercent(stats.totals.effort.labelledFraction) < 80 && (
+          <p className="mt-2 text-xs text-dim">
+            {stats.totals.effort.labelled === 0
+              ? "No sets rated for effort — all of them count as hard sets. Tap Effort when you log one and the volume above starts reflecting how close to failure you actually went."
+              : `${ratedPercent(stats.totals.effort.labelledFraction)}% of sets rated for effort; the rest count as hard sets.`}
+          </p>
+        )}
 
         {(neglected.length > 0 || showCardioRow) && (
           <section className="mt-6">

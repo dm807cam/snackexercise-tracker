@@ -24,6 +24,8 @@ export interface ProposedEntry {
   durationSec: number | null;
   distanceM: number | null;
   avgHeartRate: number | null;
+  /** "easy" | "hard" | "failure" if the speaker said so, else null. */
+  effort: string | null;
   timeHint: string | null;
   notes: string | null;
   /** Only present when the movement is new and needs adding to the catalogue. */
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
         durationSec: entry.durationSec,
         distanceM: entry.distanceM,
         avgHeartRate: entry.avgHeartRate,
+        effort: entry.effort ?? null,
         timeHint: entry.timeHint,
         notes: entry.notes,
         suggestedMuscles,

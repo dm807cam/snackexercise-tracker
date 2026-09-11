@@ -3,7 +3,7 @@ import { z } from "zod";
 import { handle } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { MUSCLE_SLUGS } from "@/lib/muscles";
-import { localDateSchema } from "@/lib/validation";
+import { effortSchema, localDateSchema } from "@/lib/validation";
 import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,14 @@ export const dynamic = "force-dynamic";
  * Accepts both export formats.
  *
  * Version 1 predates cardio, so its files carry no cardioBias, no distance and
- * no daily metrics. Rather than a second schema, the new fields default: a v1
- * exercise restores at bias 0, which is exactly what it was — resistance work.
- * An old backup must never stop restoring because the app grew.
+ * no daily metrics; version 2 predates the per-entry effort rating. Rather than
+ * a schema per version, the new fields default: a v1 exercise restores at bias
+ * 0, which is exactly what it was — resistance work — and a v2 entry restores
+ * with no effort rating, which is exactly what it had. An old backup must never
+ * stop restoring because the app grew.
  */
 const importSchema = z.object({
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   exercises: z.array(
     z.object({
       slug: z.string().min(1),
@@ -47,6 +49,7 @@ const importSchema = z.object({
       durationSec: z.number().int().nullable(),
       distanceM: z.number().nullish(),
       avgHeartRate: z.number().int().nullish(),
+      effort: effortSchema.nullish(),
       notes: z.string().nullable(),
       source: z.string(),
     }),
@@ -139,6 +142,7 @@ export async function POST(request: NextRequest) {
           durationSec: entry.durationSec,
           distanceM: entry.distanceM ?? null,
           avgHeartRate: entry.avgHeartRate ?? null,
+          effort: entry.effort ?? null,
           notes: entry.notes,
           source: entry.source,
         },

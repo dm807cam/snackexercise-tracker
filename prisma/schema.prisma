@@ -75,6 +75,11 @@ model SetEntry {
   /// Mean heart rate in bpm, if a watch recorded one. Best available evidence
   /// of intensity; everything else is inference.
   avgHeartRate Int?
+  /// "easy" | "hard" | "failure" — how close the set was to failure, which is
+  /// the variable that gates hypertrophic stimulus. Null means the user did not
+  /// say, which is every row logged before this column existed; lib/effort.ts
+  /// decides what that is worth and says why.
+  effort      String?
   notes       String?
 
   /// "manual" | "llm" — lets you see which entries came from dictation.

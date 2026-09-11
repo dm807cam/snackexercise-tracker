@@ -23,6 +23,7 @@ accident.
 | [0012](./0012-times-are-typed-not-stamped.md) | A typed time beats an instant built in the browser | Accepted |
 | [0013](./0013-one-colour-one-quality.md) | One colour, one quality — and `--accent` is not one of them | Accepted |
 | [0014](./0014-a-daily-share-with-no-carry-over.md) | Today's target is a flat seventh, and nothing carries over | Accepted |
+| [0015](./0015-effort-scales-effective-sets.md) | Effort scales effective sets; an unrated set counts as a hard one | Accepted |
 
 ## Format
 

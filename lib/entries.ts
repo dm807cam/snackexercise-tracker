@@ -91,6 +91,7 @@ export async function createEntry(input: EntryInput) {
       durationSec: input.durationSec ?? null,
       distanceM: input.distanceM ?? null,
       avgHeartRate: input.avgHeartRate ?? null,
+      effort: input.effort ?? null,
       notes: input.notes ?? null,
       source: input.source,
     },

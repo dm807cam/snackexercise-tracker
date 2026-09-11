@@ -67,6 +67,7 @@ export type EntryWithExercise = ScoredEntry & {
   source: string;
   distanceM: number | null;
   avgHeartRate: number | null;
+  effort: string | null;
   exercise: ScoredEntry["exercise"] & {
     slug: string;
     bodyweight: boolean;

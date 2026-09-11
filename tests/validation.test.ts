@@ -151,3 +151,31 @@ describe("a stated time of day", () => {
     });
   });
 });
+
+describe("effort", () => {
+  it("accepts the three levels on a new entry", () => {
+    for (const effort of ["easy", "hard", "failure"]) {
+      expect(entryInputSchema.parse({ exerciseName: "Push-up", effort }).effort).toBe(effort);
+    }
+  });
+
+  it("accepts an entry with no rating, which is the normal case", () => {
+    const parsed = entryInputSchema.parse({ exerciseName: "Push-up" });
+    expect(parsed.effort ?? null).toBeNull();
+  });
+
+  it("lets an edit clear a rating back to unrecorded", () => {
+    expect(entryUpdateSchema.parse({ effort: null }).effort).toBeNull();
+  });
+
+  it("does not invent a rating on an edit that says nothing about it", () => {
+    // Same trap as exercisePatchSchema above: a field that defaults would
+    // silently stamp every retimed entry as a hard set.
+    expect("effort" in entryUpdateSchema.parse({ sets: 2 })).toBe(false);
+  });
+
+  it("rejects anything outside the three levels", () => {
+    expect(() => entryInputSchema.parse({ exerciseName: "Push-up", effort: "rir2" })).toThrow();
+    expect(() => entryInputSchema.parse({ exerciseName: "Push-up", effort: 3 })).toThrow();
+  });
+});

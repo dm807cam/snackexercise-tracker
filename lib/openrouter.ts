@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { EFFORT_LEVELS } from "./effort";
 import { MUSCLE_SLUGS } from "./muscles";
 
 export const DEFAULT_MODEL = "google/gemini-2.5-flash";
@@ -40,6 +41,12 @@ export const parsedEntrySchema = z.object({
   // dictation. Older stored payloads predate them entirely.
   distanceM: z.number().min(0).max(300000).nullish().default(null),
   avgHeartRate: z.number().int().min(20).max(250).nullish().default(null),
+  /**
+   * How close to failure the speaker said it was, else null. Nullish for the
+   * same reason as the two fields above: a model that omits it should cost the
+   * user a rating, not the dictation.
+   */
+  effort: z.enum(EFFORT_LEVELS).nullish().default(null),
   /** "HH:MM" if the speaker mentioned a time, else null. */
   timeHint: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
   notes: z.string().max(200).nullable(),
@@ -80,6 +87,7 @@ const RESPONSE_FORMAT = {
               "durationSec",
               "distanceM",
               "avgHeartRate",
+              "effort",
               "timeHint",
               "notes",
             ],
@@ -91,6 +99,7 @@ const RESPONSE_FORMAT = {
               durationSec: { type: ["integer", "null"], description: "Seconds of work: a hold for planks/carries/hangs, or the elapsed time for a run, ride or row; null otherwise" },
               distanceM: { type: ["number", "null"], description: "Distance covered in metres; convert km and miles to metres; null if not stated" },
               avgHeartRate: { type: ["integer", "null"], description: "Average heart rate in bpm if stated, else null" },
+              effort: { type: ["string", "null"], enum: ["easy", "hard", "failure", null], description: "How close to failure the set was, if the speaker said: 'easy'/'comfortable' -> easy, 'hard'/'tough'/'a couple left' -> hard, 'to failure'/'until I could not' -> failure. null if not stated" },
               timeHint: { type: ["string", "null"], description: "24h HH:MM if a time of day was stated, else null" },
               notes: { type: ["string", "null"], description: "Any remaining detail worth keeping, else null" },
             },
@@ -113,6 +122,7 @@ Rules:
 - "3 sets of 12" -> sets 3, reps 12. "12 pull-ups" -> sets 1, reps 12.
 - Convert pounds to kilograms (1 lb = 0.4536 kg). Report bodyweight movements with weightKg null unless extra load was stated.
 - Holds and carries (plank, dead hang, farmer's carry) use durationSec, not reps.
+- Only set effort when the speaker actually says how hard it was. "10 push-ups" is null, not "hard".
 - Cardio (run, walk, cycle, row, swim) uses durationSec for elapsed time and distanceM for distance, with sets 1 and reps null. "5k in 27 minutes" -> distanceM 5000, durationSec 1620.
 - Convert distances to metres: "5k" and "5 km" -> 5000, "3 miles" -> 4828.
 - A stated step count for the day ("I walked 11 thousand steps") is NOT an exercise: put it in the top-level steps field and do not create an entry for it.

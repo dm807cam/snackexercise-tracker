@@ -4,9 +4,14 @@
  *
  * The primary metric is EFFECTIVE SETS: each logged set contributes its
  * ExerciseMuscle.weight (1.0 primary / 0.5 secondary / 0.25 stabiliser) to that
- * muscle. It is the standard way of counting hypertrophy volume, and crucially
- * it still works when you did not record a weight — which, logging snacks
- * one-handed on the way back upstairs, is most of the time.
+ * muscle, scaled by how close to failure it was. It is the standard way of
+ * counting hypertrophy volume, and crucially it still works when you did not
+ * record a weight — which, logging snacks one-handed on the way back upstairs,
+ * is most of the time.
+ *
+ * Effort is the one input that genuinely gates the stimulus, so it scales the
+ * credit; see lib/effort.ts, which also explains why a set nobody rated still
+ * counts in full.
  *
  * Tonnage (sets x reps x kg) is computed alongside as a secondary number, and is
  * simply absent for entries with no weight rather than guessed at.
@@ -29,6 +34,7 @@ import { type LocalDate, daysBetween } from "./dates";
 // would close the cycle. The balance itself is computed by the caller.
 import type { BalanceResult } from "./balance";
 import type { SpacingSummary } from "./spacing";
+import { effortBreakdown, effortMultiplier, type EffortBreakdown } from "./effort";
 
 export interface ScoredEntry {
   id: string;
@@ -38,6 +44,8 @@ export interface ScoredEntry {
   reps: number | null;
   weightKg: number | null;
   durationSec: number | null;
+  /** "easy" | "hard" | "failure"; null or absent is "not recorded". */
+  effort?: string | null;
   exercise: {
     id: string;
     name: string;
@@ -76,8 +84,9 @@ export function muscleEffectiveSets(entries: readonly ScoredEntry[]): MuscleTota
     const strength = strengthWeight(entry.exercise);
     if (strength <= 0) continue;
 
+    const effort = effortMultiplier(entry.effort);
     for (const { muscle, weight } of entry.exercise.muscles) {
-      if (muscle in totals) totals[muscle as MuscleSlug] += sets * weight * strength;
+      if (muscle in totals) totals[muscle as MuscleSlug] += sets * weight * strength * effort;
     }
   }
   return totals;
@@ -117,7 +126,9 @@ export function entryEffectiveSets(entry: ScoredEntry): number {
   const sets = entry.sets > 0 ? entry.sets : 1;
   const strength = strengthWeight(entry.exercise);
   if (strength <= 0) return 0;
-  return entry.exercise.muscles.reduce((sum, m) => sum + sets * m.weight * strength, 0);
+
+  const effort = effortMultiplier(entry.effort);
+  return entry.exercise.muscles.reduce((sum, m) => sum + sets * m.weight * strength * effort, 0);
 }
 
 /** Roll fine-grained muscle totals up to the 12 radar axes. */
@@ -220,6 +231,15 @@ export interface StatsResult {
     activeDays: number;
     /** Days in the window that carry a step count, reported separately. */
     daysWithSteps: number;
+    /**
+     * How many of the window's sets were rated for effort.
+     *
+     * Reported because the effective-set total above counts an unrated set as a
+     * hard one. That is the right default (see lib/effort.ts) but it is an
+     * assumption, and an assumption the user cannot see is one the app is
+     * making on their behalf.
+     */
+    effort: EffortBreakdown;
   };
   balance: BalanceResult;
   /** Days since any cardio was logged; null if never. */
@@ -305,6 +325,7 @@ export function buildStats<T extends ScoredEntry>(params: {
       tonnageKg: round(totalTonnage(current)),
       activeDays: new Set(current.map((e) => e.localDate)).size,
       daysWithSteps,
+      effort: effortBreakdown(current),
     },
     balance,
     daysSinceCardio: lastCardio ? Math.max(0, daysBetween(lastCardio, today)) : null,

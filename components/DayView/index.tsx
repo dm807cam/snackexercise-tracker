@@ -7,6 +7,7 @@ import { QuickAdd } from "@/components/QuickAdd";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
 import { ManualForm, type ManualDraft } from "@/components/QuickAdd/ManualForm";
+import { isEffort } from "@/lib/effort";
 import { Toast, type ToastState } from "@/components/Toast";
 import { api } from "@/lib/client";
 import { addDays, formatTime, type LocalDate } from "@/lib/dates";
@@ -127,6 +128,7 @@ export function DayView({
                   durationSec: entry.durationSec,
                   distanceM: entry.distanceM,
                   avgHeartRate: entry.avgHeartRate,
+                  effort: isEffort(entry.effort) ? entry.effort : null,
                   notes: entry.notes,
                   source: entry.source === "llm" ? "llm" : "manual",
                 }),
@@ -172,6 +174,7 @@ export function DayView({
           durationSec: draft.durationSec,
           distanceM: draft.distanceM,
           avgHeartRate: draft.avgHeartRate,
+          effort: draft.effort,
           notes: draft.notes,
           // Sent as digits plus the day they belong to; the server resolves
           // them in the app's zone, which the browser may not share.
@@ -318,6 +321,7 @@ export function DayView({
               durationSec: editing.durationSec,
               distanceM: editing.distanceM,
               avgHeartRate: editing.avgHeartRate,
+              effort: isEffort(editing.effort) ? editing.effort : null,
               notes: editing.notes,
               performedTime: formatTime(new Date(editing.performedAt), timeZone),
             }}
