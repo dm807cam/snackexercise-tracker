@@ -117,7 +117,10 @@ export function VoiceTab({
         durationSec: p.durationSec,
         distanceM: p.distanceM,
         avgHeartRate: p.avgHeartRate,
-        effort: p.effort,
+        // Cleared where the chips are not offered, exactly as ManualForm does.
+        // Showing no control and submitting the value anyway is how a dictated
+        // "that run was hard" got stored invisibly.
+        effort: ratesEffort(p.cardioBias) ? p.effort : null,
         notes: p.notes,
         source: "llm" as const,
       }));

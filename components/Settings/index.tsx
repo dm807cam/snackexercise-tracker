@@ -17,6 +17,7 @@ import {
   MAX_RESTING_HR,
   MIN_BIRTH_YEAR,
   MIN_RESTING_HR,
+  normalisePhysiologyInput,
   type Physiology,
 } from "@/lib/intensity";
 import {
@@ -88,12 +89,23 @@ export function SettingsView({
   });
 
   function savePhysiology(patch: { birthYear?: string; restingHr?: string }) {
-    const next = { ...savedPhysiology, ...patch };
-    if (next.birthYear === savedPhysiology.birthYear && next.restingHr === savedPhysiology.restingHr) {
+    // Normalised before storing, and written back into the field, so what the
+    // form shows is what the app will actually honour. Saving verbatim left
+    // `getPhysiology` silently discarding an out-of-range year under a "Saved"
+    // toast.
+    const stored = normalisePhysiologyInput(patch);
+    if (stored.birthYear !== undefined) setBirthYear(stored.birthYear);
+    if (stored.restingHr !== undefined) setRestingHr(stored.restingHr);
+
+    const next = { ...savedPhysiology, ...stored };
+    if (
+      next.birthYear === savedPhysiology.birthYear &&
+      next.restingHr === savedPhysiology.restingHr
+    ) {
       return;
     }
     setSavedPhysiology(next);
-    save(patch);
+    save(stored);
   }
   const preset = presetFor(targets);
 

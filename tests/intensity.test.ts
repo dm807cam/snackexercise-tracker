@@ -10,6 +10,7 @@ import {
   emptyIntensity,
   maxHeartRate,
   personalHeartRateFactor,
+  normalisePhysiologyInput,
   relativeIntensity,
   summariseIntensity,
   type Physiology,
@@ -235,5 +236,31 @@ describe("summariseIntensity", () => {
   it("has an empty shape that says nothing rather than claiming zero effort", () => {
     expect(emptyIntensity().daysSinceVigorous).toBeNull();
     expect(emptyIntensity().personalised).toBe(false);
+  });
+});
+
+describe("normalisePhysiologyInput", () => {
+  it("keeps a plausible year and rate", () => {
+    expect(normalisePhysiologyInput({ birthYear: "1986", restingHr: "55" })).toEqual({
+      birthYear: "1986",
+      restingHr: "55",
+    });
+  });
+
+  it("clamps rather than storing something the app will then ignore", () => {
+    // Saving verbatim left getPhysiology silently discarding the value under a
+    // "Saved" toast, with the field still showing it.
+    expect(normalisePhysiologyInput({ birthYear: "1890" }).birthYear).toBe("1900");
+    expect(normalisePhysiologyInput({ restingHr: "5" }).restingHr).toBe("30");
+    expect(normalisePhysiologyInput({ restingHr: "300" }).restingHr).toBe("120");
+  });
+
+  it("treats empty as cleared, not as zero", () => {
+    expect(normalisePhysiologyInput({ birthYear: "  " }).birthYear).toBe("");
+    expect(normalisePhysiologyInput({ restingHr: "" }).restingHr).toBe("");
+  });
+
+  it("only touches the fields it was given", () => {
+    expect(normalisePhysiologyInput({ birthYear: "1986" })).toEqual({ birthYear: "1986" });
   });
 });

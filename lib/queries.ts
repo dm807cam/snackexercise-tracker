@@ -119,6 +119,16 @@ export async function getEntriesInRange(
 export async function getDaySummary(
   date: LocalDate,
   timeZone?: string,
+  /**
+   * The app's today, for anchoring the step baseline's 90-day window.
+   *
+   * Passed rather than defaulted to the container's local date, so the day
+   * ring and the balance marker cannot end up on different baselines under a
+   * Settings timezone override that crosses a date boundary — which is exactly
+   * the disagreement `stepMetMinutes` below says it exists to prevent. (The
+   * other half of that scan's cost, its lack of memoisation, is issue #23.)
+   */
+  today: LocalDate = todayLocalDate(),
 ): Promise<DaySummary & {
   entries: EntryWithExercise[];
   steps: number | null;
@@ -148,7 +158,7 @@ export async function getDaySummary(
     getEntriesForDate(date),
     getSteps(date),
     getActiveWindow(),
-    getStepSettings(),
+    getStepSettings(today),
     getTargets(),
     getPhysiology(),
   ]);

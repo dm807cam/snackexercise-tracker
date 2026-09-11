@@ -216,6 +216,40 @@ export interface IntensitySummary {
   personalised: boolean;
 }
 
+/**
+ * Clamp what the user typed to what the app will actually honour.
+ *
+ * Returned as the strings to store, so the field can be written back with the
+ * stored value. Without this the settings form saved "1890" verbatim, showed a
+ * "Saved" toast, and `getPhysiology` then silently discarded it — leaving the
+ * field claiming a birth year the app was ignoring.
+ */
+export function normalisePhysiologyInput(input: {
+  birthYear?: string;
+  restingHr?: string;
+}): { birthYear?: string; restingHr?: string } {
+  const out: { birthYear?: string; restingHr?: string } = {};
+  const thisYear = new Date().getFullYear();
+
+  if (input.birthYear !== undefined) {
+    const year = Number(input.birthYear);
+    out.birthYear =
+      input.birthYear.trim() === "" || !Number.isFinite(year)
+        ? ""
+        : String(Math.min(thisYear, Math.max(MIN_BIRTH_YEAR, Math.round(year))));
+  }
+
+  if (input.restingHr !== undefined) {
+    const bpm = Number(input.restingHr);
+    out.restingHr =
+      input.restingHr.trim() === "" || !Number.isFinite(bpm)
+        ? ""
+        : String(Math.min(MAX_RESTING_HR, Math.max(MIN_RESTING_HR, Math.round(bpm))));
+  }
+
+  return out;
+}
+
 /** Nothing vigorous, and no way to read a heart rate personally. */
 export function emptyIntensity(): IntensitySummary {
   return {

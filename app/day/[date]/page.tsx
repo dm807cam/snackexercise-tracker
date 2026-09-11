@@ -28,7 +28,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const config = await getAppConfig();
 
   const [summary, exercises, recentIds] = await Promise.all([
-    getDaySummary(date, config.timeZone),
+    getDaySummary(date, config.timeZone, config.today),
     getExercises(),
     getRecentExerciseIds(),
   ]);
