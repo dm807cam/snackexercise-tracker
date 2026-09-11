@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStats,
   emptyMuscleTotals,
+  entryEffectiveSets,
   muscleEffectiveSets,
   perWeek,
   rollUpToAxes,
@@ -16,6 +17,7 @@ import {
 import type { AxisSlug } from "@/lib/muscles";
 import { buildBalance, effectiveSetEquivalents } from "@/lib/balance";
 import { summariseSpacing } from "@/lib/spacing";
+import { effortMultiplier } from "@/lib/effort";
 
 /**
  * The inputs buildStats gained when cardio arrived. These tests are about the
@@ -44,6 +46,7 @@ function entry(overrides: Partial<ScoredEntry> & { muscles: [string, number][] }
     reps: rest.reps ?? null,
     weightKg: rest.weightKg ?? null,
     durationSec: rest.durationSec ?? null,
+    effort: rest.effort ?? null,
     exercise: {
       id: "x1",
       name: "Test",
@@ -52,6 +55,58 @@ function entry(overrides: Partial<ScoredEntry> & { muscles: [string, number][] }
     },
   };
 }
+
+describe("effort scaling", () => {
+  it("discounts a set the user rated as easy", () => {
+    const easy = muscleEffectiveSets([entry({ effort: "easy", muscles: [["chest", 1]] })]);
+    const hard = muscleEffectiveSets([entry({ effort: "hard", muscles: [["chest", 1]] })]);
+    expect(easy.chest).toBeLessThan(hard.chest);
+  });
+
+  it("leaves an unrated set worth exactly what it was before the field existed", () => {
+    // The guarantee the whole default rests on: adding the column must not
+    // restate a year of logged training.
+    const unrated = muscleEffectiveSets([entry({ sets: 3, muscles: [["chest", 1], ["triceps", 0.5]] })]);
+    expect(unrated.chest).toBe(3);
+    expect(unrated.triceps).toBe(1.5);
+  });
+
+  it("scales the entry total the same way the per-muscle totals are scaled", () => {
+    const easy = entryEffectiveSets(entry({ effort: "easy", muscles: [["chest", 1], ["triceps", 0.5]] }));
+    const hard = entryEffectiveSets(entry({ effort: "hard", muscles: [["chest", 1], ["triceps", 0.5]] }));
+    expect(easy).toBeCloseTo(hard * effortMultiplier("easy"), 10);
+  });
+
+  it("does not let effort resurrect a pure cardio entry's effective sets", () => {
+    const run = entry({
+      effort: "failure",
+      exercise: { id: "x1", name: "Run", cardioBias: 1, muscles: [] },
+      muscles: [["quads", 1]],
+    });
+    expect(entryEffectiveSets(run)).toBe(0);
+    expect(muscleEffectiveSets([run]).quads).toBe(0);
+  });
+
+  it("reports how much of a window was rated, alongside the totals", () => {
+    const stats = buildStats({
+      ...NO_CARDIO,
+      windowDays: 7,
+      start: "2026-09-01",
+      end: "2026-09-07",
+      current: [
+        entry({ id: "a", sets: 2, effort: "hard", muscles: [["chest", 1]] }),
+        entry({ id: "b", sets: 2, effort: null, muscles: [["chest", 1]] }),
+      ],
+      previous: [],
+      lastTrained: new Map<AxisSlug, string>(),
+      today: "2026-09-07",
+    });
+
+    expect(stats.totals.effort.labelled).toBe(2);
+    expect(stats.totals.effort.unlabelled).toBe(2);
+    expect(stats.totals.effort.labelledFraction).toBe(0.5);
+  });
+});
 
 describe("muscleEffectiveSets", () => {
   it("credits each muscle by its weighting times the number of sets", () => {

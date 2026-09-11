@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { distanceUnitsFor, fromKg, fromMetres, toKg, toMetres, type Units } from "@/lib/format";
+import { EFFORT_LEVELS, effortHint, effortLabel, isEffort, type Effort } from "@/lib/effort";
 import type { ExerciseOption } from "./types";
 
 export interface ManualDraft {
@@ -12,6 +13,11 @@ export interface ManualDraft {
   durationSec: number | null;
   distanceM: number | null;
   avgHeartRate: number | null;
+  /**
+   * How close the set was to failure, or null for "did not say". Optional on
+   * purpose — see lib/effort.ts, which counts an unrated set as a hard one.
+   */
+  effort: Effort | null;
   notes: string | null;
   /**
    * "HH:MM" on the app's clock, or null for "whenever the app would have
@@ -55,6 +61,9 @@ export function ManualForm({
     initial?.avgHeartRate != null ? String(initial.avgHeartRate) : "",
   );
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [effort, setEffort] = useState<Effort | null>(
+    isEffort(initial?.effort) ? initial.effort : null,
+  );
   const [time, setTime] = useState(initial?.performedTime ?? "");
 
   const selected = exercises.find((e) => e.id === exerciseId) ?? null;
@@ -62,6 +71,10 @@ export function ManualForm({
   // bench press has no pace, and four dead fields on a phone is four fields to
   // scroll past at the top of the stairs.
   const isCardio = (selected?.cardioBias ?? 0) > 0;
+  // Effort is asked for wherever there is resistance work to rate. A pure run
+  // has no proximity to failure worth recording, and its effective sets are
+  // zeroed anyway, so the chips would change nothing.
+  const isPureCardio = (selected?.cardioBias ?? 0) >= 1;
   const distanceUnits = distanceUnitsFor(units);
 
   // Recently used first: an alphabetical list of 67 movements is the wrong
@@ -104,6 +117,7 @@ export function ManualForm({
           : Math.round(toMetres(distanceValue, units)),
       avgHeartRate:
         heartRateValue == null || Number.isNaN(heartRateValue) ? null : Math.round(heartRateValue),
+      effort,
       notes: notes.trim() === "" ? null : notes.trim(),
       // The same pattern the server validates against. A looser one here turns
       // a browser that falls back to a text input, and a typo like 25:00, into
@@ -188,6 +202,46 @@ export function ManualForm({
             step="1"
             min={20}
           />
+        </div>
+      )}
+
+      {!isPureCardio && (
+        <div>
+          <p className="mb-2 text-sm font-medium">Effort</p>
+          {/*
+            The variable that actually gates hypertrophy, and the only one the
+            app could not infer from what is already logged. Three chips rather
+            than an RIR number: one tap on the way back upstairs is a set that
+            gets logged, and a number to think about is one that does not.
+            Tapping the chosen chip again clears it — "I would rather not say"
+            has to stay reachable, or the field becomes a thing to get past.
+          */}
+          <div className="grid grid-cols-3 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
+            {EFFORT_LEVELS.map((level) => {
+              const active = effort === level;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  aria-pressed={active}
+                  title={effortHint(level)}
+                  onClick={() => setEffort(active ? null : level)}
+                  className="tap rounded-md py-2 text-sm font-medium"
+                  style={{
+                    background: active ? "var(--accent)" : "transparent",
+                    color: active ? "var(--accent-contrast)" : "var(--text-dim)",
+                  }}
+                >
+                  {effortLabel(level)}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-dim">
+            {effort
+              ? effortHint(effort)
+              : "Optional. Left blank it counts as a hard set, which is what every set logged before this existed counts as."}
+          </p>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MUSCLE_SLUGS } from "./muscles";
 import { isValidLocalDate } from "./dates";
+import { EFFORT_LEVELS } from "./effort";
 
 export const localDateSchema = z.string().refine(isValidLocalDate, {
   message: "Expected a valid YYYY-MM-DD date",
@@ -10,6 +11,13 @@ export const localDateSchema = z.string().refine(isValidLocalDate, {
 export const timeOfDaySchema = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "Expected a time as HH:MM" });
+
+/**
+ * How close the set was to failure. Optional everywhere: the app would rather
+ * have an unrated set than no set, and lib/effort.ts says what an unrated one
+ * is worth.
+ */
+export const effortSchema = z.enum(EFFORT_LEVELS);
 
 export const muscleWeightSchema = z.object({
   muscle: z.enum(MUSCLE_SLUGS as unknown as [string, ...string[]]),
@@ -42,6 +50,7 @@ export const entryInputSchema = z.object({
   /** Metres. A marathon is 42,195; the cap allows an ultra without allowing a typo. */
   distanceM: z.number().min(0).max(300000).nullish(),
   avgHeartRate: z.number().int().min(20).max(250).nullish(),
+  effort: effortSchema.nullish(),
   notes: z.string().max(500).nullish(),
   source: z.enum(["manual", "llm"]).default("manual"),
   /** Muscle mapping used only when creating a new custom exercise by name. */
@@ -60,6 +69,7 @@ export const entryUpdateSchema = z.object({
   durationSec: z.number().int().min(1).max(86400).nullish(),
   distanceM: z.number().min(0).max(300000).nullish(),
   avgHeartRate: z.number().int().min(20).max(250).nullish(),
+  effort: effortSchema.nullish(),
   notes: z.string().max(500).nullish(),
   performedAt: z.string().datetime({ offset: true }).optional(),
   /** Move an entry to a different clock time — see `performedTime` above. */

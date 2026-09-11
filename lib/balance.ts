@@ -34,6 +34,11 @@ import { entryEffectiveSets } from "./scoring";
  * days" and with the hypertrophy literature's ~10 sets per muscle group per
  * week. If the muscle weightings are ever edited in Settings this number drifts
  * with them — it is a property of the scale, not a literature value.
+ *
+ * The calibration assumes a logged set is a hard set, which is exactly what an
+ * unrated set is now counted as (lib/effort.ts), so this number still means
+ * what it did. Rating sets as `easy` lowers the dose against an unchanged
+ * target, which is the point of rating them.
  */
 export const STRENGTH_TARGET_EFFECTIVE_SETS_PER_WEEK = 60;
 
@@ -74,6 +79,8 @@ export interface BalanceEntry extends CardioInput {
   performedAt: Date;
   localDate: LocalDate;
   weightKg: number | null;
+  /** Scales the strength side, exactly as it does everywhere else. */
+  effort?: string | null;
   exercise: CardioInput["exercise"] & {
     id: string;
     name: string;

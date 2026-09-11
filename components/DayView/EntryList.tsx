@@ -3,6 +3,7 @@
 import { formatTime } from "@/lib/dates";
 import { formatEntryDetail, type Units } from "@/lib/format";
 import { muscleLabel, type MuscleSlug } from "@/lib/muscles";
+import { effortLabel, isEffort } from "@/lib/effort";
 
 export interface DayEntry {
   id: string;
@@ -13,6 +14,7 @@ export interface DayEntry {
   durationSec: number | null;
   distanceM: number | null;
   avgHeartRate: number | null;
+  effort: string | null;
   notes: string | null;
   source: string;
   exercise: {
@@ -118,6 +120,9 @@ function EntryRow({
           </span>
           <span className="block truncate text-sm text-dim">
             {formatEntryDetail(entry, units)}
+            {/* Shown only when it was rated. An explicit "not recorded" on every
+                unrated row would read as a reproach for not having answered. */}
+            {isEffort(entry.effort) ? ` · ${effortLabel(entry.effort).toLowerCase()}` : ""}
             {entry.notes ? ` · ${entry.notes}` : ""}
           </span>
         </span>

@@ -26,6 +26,7 @@ interface Proposal {
   durationSec: number | null;
   distanceM: number | null;
   avgHeartRate: number | null;
+  effort: string | null;
   timeHint: string | null;
   notes: string | null;
   suggestedMuscles: { muscle: string; weight: number }[] | null;
@@ -114,6 +115,7 @@ export function VoiceTab({
         durationSec: p.durationSec,
         distanceM: p.distanceM,
         avgHeartRate: p.avgHeartRate,
+        effort: p.effort,
         notes: p.notes,
         source: "llm" as const,
       }));
