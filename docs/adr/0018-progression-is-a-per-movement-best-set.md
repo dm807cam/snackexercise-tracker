@@ -42,8 +42,9 @@ a good log entry and cannot be a progression signal.
 
 **A stall is `MIN_SESSIONS_FOR_STALL` (6) sessions and `STALL_WEEKS` (4) weeks
 with the best not moving**, measured from the *first* day the current best was
-reached. It surfaces in three places: its own stats section, the existing "needs
-attention" list, and the suggestion bar.
+reached and counted **to today**, and only while the movement is still being
+trained (`STALL_RECENCY_DAYS`, 21). It surfaces in three places: its own stats
+section, the existing "needs attention" list, and the suggestion bar.
 
 **The suggestion bar upgrades a stalled pick** to the next rung of a ladder
 (`push-up → diamond push-up → dip`), kept as a slug map in `lib/progression.ts`,
@@ -72,6 +73,37 @@ inventing a personal best.
 **Its own window.** A stall is defined in weeks of unchanged best, so a 7-day
 view could never show one. A progression signal that vanished when you looked at
 a shorter window would be worse than none.
+
+**Every age is measured from today, and a stall expires.** Measuring from the
+last logged session instead would make a March personal best, last trained three
+days later, read as set "this week" in September. And without the recency bound
+a stall *latches*: the user follows the app's advice, moves to diamond push-ups,
+and "Push-up — 7w flat" sits in "needs attention" for the rest of the window
+while the bar keeps offering a step up they already took. A stall is a statement
+about training that is still happening; a movement nobody does any more has been
+dropped, which is not a problem to report.
+
+**The metric follows how a movement is USUALLY logged, not how it was ever
+logged.** Choosing estimated 1RM on a single weighted entry nulls every
+bodyweight day, because those carry no load to estimate from — twenty bodyweight
+pull-up sessions and one belted set would collapse to a series of one point,
+with no history and no stall. A majority keeps the metric on whatever the
+movement actually is.
+
+**Aerobic movements are out of scope, not just pure ones.** The duration metric
+reads longer as better, which is true of a plank and false of a 5 km row: an erg
+improving 22:00 to 20:00 over eight weeks would be scored as regressing and then
+flagged stalled at its slowest time. Teaching this module to invert itself per
+movement needs a pace, which needs a distance, which is a second metric —
+`PROGRESSION_MAX_CARDIO_BIAS` (0.5) is the cheaper and more honest answer. It
+admits the burpee, which is rep-counted.
+
+**A ladder rung has to keep serving the axis the suggestion is about.**
+Difficulty often comes from shifting emphasis: push-up chest 1.0 to diamond
+push-up chest 0.5 is still unambiguously a chest movement, but dead hang
+forearms 1.0 to pull-up forearms 0.25 is not — that upgrade would answer a
+forearms deficit with a back movement while the bar went on naming forearms.
+Half is the line between the two.
 
 **The ladder lives in code, not the database.** It is a property of the
 movements, not of the user's copy of them: slugs are stable, the ladder does not

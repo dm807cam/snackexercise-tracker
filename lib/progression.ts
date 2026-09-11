@@ -32,6 +32,23 @@
 
 import { type LocalDate, daysBetween } from "./dates";
 
+/**
+ * How aerobic a movement may be and still have a progression signal.
+ *
+ * The "hold" metric reads LONGER AS BETTER, which is true of a plank and false
+ * of a 5 km row: an erg improving 22:00 to 20:00 over eight weeks would be
+ * scored as regressing, and then flagged as stalled at its slowest time. Rather
+ * than teach this module to invert itself per movement — which needs a pace,
+ * which needs a distance, which is a whole second metric — aerobic movements
+ * are simply out of scope. Their progression is pace, which the app already
+ * shows on the entry itself.
+ *
+ * 0.5 admits the burpee, which is rep-counted and where more is more, and
+ * excludes the erg (0.8), the assault bike (0.9), shadow boxing (0.8), battle
+ * ropes and mountain climbers (0.6).
+ */
+export const PROGRESSION_MAX_CARDIO_BIAS = 0.5;
+
 /** Which progression signal a movement's history supports. */
 export type ProgressionMetric = "e1rm" | "reps" | "hold";
 
@@ -68,14 +85,23 @@ export function estimatedOneRepMax(weightKg: number, reps: number): number {
 /**
  * The progression signal this movement's history can support.
  *
- * Load first where it exists, because added weight is the least ambiguous
- * evidence of overload. Otherwise reps, which is how a fixed-load movement
- * progresses. Otherwise duration, for holds and carries. Null when the history
- * carries no numbers at all — "did some pull-ups" is a perfectly good log entry
- * and simply cannot be a progression series.
+ * Load first where it is how the movement is USUALLY logged, because added
+ * weight is the least ambiguous evidence of overload. Otherwise reps, which is
+ * how a fixed-load movement progresses. Otherwise duration, for holds and
+ * carries. Null when the history carries no numbers at all — "did some
+ * pull-ups" is a perfectly good log entry and simply cannot be a progression
+ * series.
+ *
+ * "Usually" rather than "ever" is the load-bearing word. Choosing e1rm on a
+ * single weighted entry would then null every bodyweight day, because they
+ * carry no load to estimate from: twenty bodyweight pull-up sessions and one
+ * belted set collapsed to a series of one point, no stall, no history. A
+ * majority keeps the metric on whatever the movement actually is.
  */
 export function metricFor(entries: readonly ProgressionEntry[]): ProgressionMetric | null {
-  if (entries.some((e) => (e.weightKg ?? 0) > 0 && (e.reps ?? 0) > 0)) return "e1rm";
+  const loaded = entries.filter((e) => (e.weightKg ?? 0) > 0 && (e.reps ?? 0) > 0).length;
+  if (loaded > 0 && loaded * 2 >= entries.length) return "e1rm";
+
   if (entries.some((e) => (e.reps ?? 0) > 0)) return "reps";
   if (entries.some((e) => (e.durationSec ?? 0) > 0)) return "hold";
   return null;
@@ -131,6 +157,17 @@ export function progressionSeries(
 export const MIN_SESSIONS_FOR_STALL = 6;
 /** Weeks a best has to stand, with training in between, to count as stalled. */
 export const STALL_WEEKS = 4;
+/**
+ * How recently the movement must have been trained for a stall to be current.
+ *
+ * Without this a stall LATCHES: the user follows the app's advice, moves from
+ * push-ups to diamond push-ups, and "Push-up — 7w flat" sits in "needs
+ * attention" for the rest of the window while the suggestion bar keeps offering
+ * a step up from a movement they have already stepped up from. A stall is a
+ * statement about training that is still happening; a movement nobody does any
+ * more has simply been dropped, which is not a problem to report.
+ */
+export const STALL_RECENCY_DAYS = 21;
 
 export interface ProgressionTrend {
   /** Days the movement was trained, within the window. */
@@ -139,25 +176,35 @@ export interface ProgressionTrend {
   best: ProgressionPoint;
   /** Most recent day. */
   latest: ProgressionPoint;
-  /** Whole weeks the best has stood without being beaten. */
+  /** Whole weeks since the best was set, counted to TODAY. */
   weeksFlat: number;
+  /** Days since the movement was last trained at all. */
+  daysSinceTrained: number;
   /**
-   * True when the movement has been trained often enough, for long enough,
-   * without the best set moving. "Push-up: 3 x 10 for 9 weeks, no change" is a
-   * single sentence that does more for this app's goal than most of the charts
-   * on the stats page.
+   * True when the movement is still being trained, often enough and for long
+   * enough, without the best set moving. "Push-up: 3 x 10 for 9 weeks, no
+   * change" is a single sentence that does more for this app's goal than most
+   * of the charts on the stats page.
    */
   stalled: boolean;
 }
 
 /**
- * Read a series as a trend.
+ * Read a series as a trend, as of a given day.
  *
  * Deliberately anchored on the BEST rather than on a fitted slope. A regression
  * through six scattered snack sessions is mostly noise, and "your best has not
  * moved in nine weeks" is both more robust and more actionable than a gradient.
+ *
+ * `today` is required rather than defaulted because every number here is an AGE,
+ * and an age measured from the last logged session instead of from now is a
+ * different and much less useful quantity: a March personal best, last trained
+ * three days later, would read "set this week" in September.
  */
-export function progressionTrend(series: readonly ProgressionPoint[]): ProgressionTrend | null {
+export function progressionTrend(
+  series: readonly ProgressionPoint[],
+  today: LocalDate,
+): ProgressionTrend | null {
   if (series.length === 0) return null;
 
   let best = series[0];
@@ -168,14 +215,19 @@ export function progressionTrend(series: readonly ProgressionPoint[]): Progressi
   }
 
   const latest = series[series.length - 1];
-  const weeksFlat = Math.floor(Math.max(0, daysBetween(best.date, latest.date)) / 7);
+  const weeksFlat = Math.floor(Math.max(0, daysBetween(best.date, today)) / 7);
+  const daysSinceTrained = Math.max(0, daysBetween(latest.date, today));
 
   return {
     sessions: series.length,
     best,
     latest,
     weeksFlat,
-    stalled: series.length >= MIN_SESSIONS_FOR_STALL && weeksFlat >= STALL_WEEKS,
+    daysSinceTrained,
+    stalled:
+      series.length >= MIN_SESSIONS_FOR_STALL &&
+      weeksFlat >= STALL_WEEKS &&
+      daysSinceTrained <= STALL_RECENCY_DAYS,
   };
 }
 
@@ -189,6 +241,7 @@ export interface ExerciseProgress {
   best: ProgressionPoint;
   latest: ProgressionPoint;
   weeksFlat: number;
+  daysSinceTrained: number;
   stalled: boolean;
   /** Full per-day series, oldest first, for the sparkline and the history list. */
   series: ProgressionPoint[];
@@ -196,17 +249,20 @@ export interface ExerciseProgress {
   nextStep: string | null;
 }
 
-export function buildExerciseProgress(exercise: {
-  id: string;
-  name: string;
-  slug: string;
-  entries: readonly ProgressionEntry[];
-}): ExerciseProgress | null {
+export function buildExerciseProgress(
+  exercise: {
+    id: string;
+    name: string;
+    slug: string;
+    entries: readonly ProgressionEntry[];
+  },
+  today: LocalDate,
+): ExerciseProgress | null {
   const metric = metricFor(exercise.entries);
   if (!metric) return null;
 
   const series = progressionSeries(exercise.entries, metric);
-  const trend = progressionTrend(series);
+  const trend = progressionTrend(series, today);
   if (!trend) return null;
 
   return {
@@ -218,6 +274,7 @@ export function buildExerciseProgress(exercise: {
     best: trend.best,
     latest: trend.latest,
     weeksFlat: trend.weeksFlat,
+    daysSinceTrained: trend.daysSinceTrained,
     stalled: trend.stalled,
     series,
     nextStep: nextRung(exercise.slug),

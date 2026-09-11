@@ -227,7 +227,13 @@ export function buildSuggestion(params: {
   const primary = ranked[0];
   const chosen = chooseExercise(primary.axis, params.exercises, params.recentIds, params.axisOf);
 
-  const upgraded = progressionUpgrade(chosen, params.exercises, params.progress ?? []);
+  const upgraded = progressionUpgrade(
+    primary.axis,
+    chosen,
+    params.exercises,
+    params.progress ?? [],
+    params.axisOf,
+  );
   const exercise = upgraded ?? chosen;
 
   return {
@@ -249,6 +255,19 @@ export interface StalledMovement {
 }
 
 /**
+ * How much of the chosen movement's service to the ranked axis the rung above
+ * has to retain.
+ *
+ * A ladder climbs in difficulty, and difficulty often comes from shifting
+ * emphasis: a push-up is chest 1.0 and a diamond push-up chest 0.5, which is
+ * still unambiguously a chest movement. A dead hang is forearms 1.0 and a
+ * pull-up forearms 0.25, which is not — upgrading there would answer a forearms
+ * deficit with a back movement while the bar went on naming forearms. Half is
+ * the line between the two.
+ */
+const UPGRADE_AXIS_RETENTION = 0.5;
+
+/**
  * Swap a stalled pick for the next rung up the ladder.
  *
  * The case this exists for: a fixed-load movement cannot progress by adding
@@ -257,22 +276,32 @@ export interface StalledMovement {
  * progression, and the catalogue already contains the ladder — it just was not
  * written down anywhere until lib/progression.ts.
  *
- * Conservative on purpose. It only fires when the movement is actually stalled,
- * only when the rung above is in the user's own catalogue, and the bar says
- * what it did and why — a suggestion that silently proposes something harder
- * than what was asked for is the app overreaching.
+ * Conservative on purpose. It fires only when the movement is actually stalled,
+ * only when the rung above is in the user's own catalogue, only when that rung
+ * still serves the axis the suggestion is about, and the bar says what it did
+ * and why — a suggestion that silently proposes something harder than what was
+ * asked for is the app overreaching.
  */
 function progressionUpgrade(
+  axis: AxisSlug | null,
   chosen: ExerciseChoice | null,
   exercises: readonly ExerciseChoice[],
   progress: readonly StalledMovement[],
+  axisOf: (muscle: string) => AxisSlug | undefined,
 ): ExerciseChoice | null {
-  if (!chosen) return null;
+  // Cardio has no ladder, and "the axis" is not a muscle group there anyway.
+  if (!chosen || axis === null) return null;
 
   const stall = progress.find((p) => p.exerciseId === chosen.id);
   if (!stall?.stalled || !stall.nextStep) return null;
 
-  return exercises.find((e) => e.slug === stall.nextStep) ?? null;
+  const rung = exercises.find((e) => e.slug === stall.nextStep);
+  if (!rung) return null;
+
+  const serves = (exercise: ExerciseChoice) =>
+    exercise.muscles.reduce((sum, m) => (axisOf(m.muscle) === axis ? sum + m.weight : sum), 0);
+
+  return serves(rung) >= serves(chosen) * UPGRADE_AXIS_RETENTION ? rung : null;
 }
 
 function reasonFor(candidate: SuggestionCandidate): string {

@@ -40,6 +40,7 @@ import {
 import { buildBalance, effectiveSetEquivalents } from "./balance";
 import { normalisePerMuscleTarget } from "./volume";
 import {
+  PROGRESSION_MAX_CARDIO_BIAS,
   buildExerciseProgress,
   type ExerciseProgress,
   type ProgressionEntry,
@@ -329,16 +330,29 @@ export async function getStepSettings(today: LocalDate = todayLocalDate()): Prom
  * maths is pure and needs nothing but the entries, so the only reason to touch
  * the database twice would be to fetch the same rows again.
  *
- * Pure cardio is excluded. A run's progression is pace, which the app already
- * shows on the entry itself, and an "estimated 1RM" for a 10 km run would be
- * nonsense dressed as a number.
+ * Aerobic movements are excluded, not just pure ones: their progression is
+ * pace, which the app already shows on the entry itself, and the duration
+ * metric here reads longer as better — which would score an erg improving
+ * 22:00 to 20:00 as a regression and then flag it stalled at its slowest time.
+ * See PROGRESSION_MAX_CARDIO_BIAS.
+ *
+ * Archived movements are excluded too, the way they are everywhere else: a
+ * movement the user has retired should not keep appearing in a list of things
+ * that have stopped improving.
  */
 export async function getExerciseProgress(
   start: LocalDate,
   end: LocalDate,
+  today: LocalDate,
 ): Promise<ExerciseProgress[]> {
   const rows = await prisma.setEntry.findMany({
-    where: { localDate: { gte: start, lte: end }, exercise: { cardioBias: { lt: 1 } } },
+    where: {
+      localDate: { gte: start, lte: end },
+      exercise: {
+        archived: false,
+        cardioBias: { lte: PROGRESSION_MAX_CARDIO_BIAS },
+      },
+    },
     select: {
       localDate: true,
       sets: true,
@@ -371,7 +385,7 @@ export async function getExerciseProgress(
   }
 
   return [...byExercise.values()]
-    .map((exercise) => buildExerciseProgress(exercise))
+    .map((exercise) => buildExerciseProgress(exercise, today))
     .filter((progress): progress is ExerciseProgress => progress !== null)
     // Stalled movements first — they are the reason this view exists — then by
     // how much the user actually does the movement.
@@ -538,7 +552,7 @@ export async function loadStats(
     // A stall is a slow signal: a movement cannot be shown as flat for nine
     // weeks by a seven-day window. So progression always looks back far enough
     // to see one, whatever window the user is reading the rest of the page on.
-    getExerciseProgress(addDays(today, -(PROGRESS_WINDOW_DAYS - 1)), today),
+    getExerciseProgress(addDays(today, -(PROGRESS_WINDOW_DAYS - 1)), today, today),
   ]);
 
   const balance = buildBalance({

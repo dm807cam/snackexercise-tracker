@@ -64,6 +64,16 @@ const CATALOGUE: ExerciseChoice[] = [
     ],
   },
   {
+    id: "deadhang",
+    name: "Dead hang",
+    slug: "dead-hang",
+    cardioBias: 0,
+    muscles: [
+      { muscle: "forearms", weight: 1 },
+      { muscle: "lats", weight: 0.5 },
+    ],
+  },
+  {
     id: "pullup",
     name: "Pull-up",
     slug: "pull-up",
@@ -378,6 +388,25 @@ describe("a stalled pick is upgraded to the next rung", () => {
     });
 
     expect(suggestion.exercise?.name).toBe("Push-up");
+    expect(suggestion.progressedFrom).toBeNull();
+  });
+
+  it("does not upgrade to a rung that stops serving the axis", () => {
+    // Dead hang is forearms 1.0 and pull-up forearms 0.25, so climbing that rung
+    // would answer a forearms deficit with a back movement while the bar went on
+    // naming forearms. Push-up to diamond push-up keeps half its chest and is
+    // allowed; this does not.
+    const suggestion = buildSuggestion({
+      axes: [axis("forearms", { perWeek: 0, daysSinceTrained: 9 })],
+      daysSinceCardio: 0,
+      cardioMetMinutesPerWeek: 600,
+      exercises: CATALOGUE,
+      recentIds: [],
+      axisOf: axisForMuscle,
+      progress: [{ exerciseId: "deadhang", stalled: true, nextStep: "pull-up" }],
+    });
+
+    expect(suggestion.exercise?.name).toBe("Dead hang");
     expect(suggestion.progressedFrom).toBeNull();
   });
 

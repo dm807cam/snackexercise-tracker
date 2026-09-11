@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatMetricValue, metricLabel } from "@/lib/progression";
 
 export interface ProgressPoint {
   date: string;
@@ -17,6 +18,7 @@ export interface ProgressPayload {
   best: ProgressPoint;
   latest: ProgressPoint;
   weeksFlat: number;
+  daysSinceTrained: number;
   stalled: boolean;
   series: ProgressPoint[];
   nextStep: string | null;
@@ -77,7 +79,7 @@ export function ProgressList({ progress }: { progress: ProgressPayload[] }) {
                 <span className="block truncate text-xs text-dim">{summarise(row)}</span>
               </span>
               <span className="shrink-0 tabular-nums text-xs text-dim">
-                {formatValue(row.latest.value, row.metric)}
+                {formatMetricValue(row.latest.value, row.metric)}
               </span>
             </button>
 
@@ -135,31 +137,16 @@ function summarise(row: ProgressPayload): string {
   if (row.stalled) {
     return `${row.best.detail} for ${row.weeksFlat} weeks, no change`;
   }
-  if (row.latest.value >= row.best.value) {
-    return row.sessions === 1
-      ? "first session logged"
-      : `best yet · ${row.sessions} sessions`;
-  }
+  if (row.sessions === 1) return "first session logged";
+
+  // The LATEST DAY has to be the best day, not merely tie it. `best` is the
+  // first day the peak was reached, so a movement that has never improved ties
+  // it on every session — and would read "best yet" right up until it crossed
+  // the stall threshold, which is the exact false praise this feature exists to
+  // remove.
+  if (row.latest.date === row.best.date) return `best yet · ${row.sessions} sessions`;
+
   return `best ${row.best.detail}, ${row.weeksFlat === 0 ? "this week" : `${row.weeksFlat}w ago`}`;
-}
-
-function metricLabel(metric: ProgressPayload["metric"]): string {
-  if (metric === "e1rm") return "Estimated 1RM";
-  if (metric === "reps") return "Best set";
-  return "Longest hold";
-}
-
-function formatValue(value: number, metric: ProgressPayload["metric"]): string {
-  if (metric === "e1rm") {
-    const rounded = Math.round(value * 10) / 10;
-    return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} kg`;
-  }
-  if (metric === "reps") return `${Math.round(value)} reps`;
-
-  const mins = Math.floor(value / 60);
-  const rem = Math.round(value % 60);
-  if (mins === 0) return `${rem}s`;
-  return rem === 0 ? `${mins}m` : `${mins}m ${rem}s`;
 }
 
 /** "diamond-push-up" -> "Diamond push-up". The slug is the catalogue's key. */
