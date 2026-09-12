@@ -2,10 +2,7 @@ services:
   app:
     build: .
     image: snackexercise-tracker
-    # Deliberately no container_name: a fixed one is unique per machine, so a
-    # second instance collides with the first however the rest is configured.
-    # Compose names the container after the project instead, which is what
-    # keeps two stacks apart.
+    container_name: snackexercise-tracker
     restart: unless-stopped
     ports:
       # Host port only. Override with APP_PORT if 3000 is taken.
@@ -17,10 +14,7 @@ services:
       # Optional: seeds the key on first run. You can also paste it in Settings.
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
     volumes:
-      # Whole mount spec, not just the source, so it can be either the managed
-      # volume below or a host path. The container always writes to /data.
-      # A named volume other than the default must also be declared down there.
-      - "${APP_VOLUMES:-snackexercise-data:/data}"
+      - snackexercise-data:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
