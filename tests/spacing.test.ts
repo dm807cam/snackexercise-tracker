@@ -206,6 +206,18 @@ describe("a configurable target", () => {
     expect(summariseSpacing([], DEFAULT_ACTIVE_WINDOW, 12).targetBouts).toBe(12);
     expect(summariseSpacing([], DEFAULT_ACTIVE_WINDOW, 0).targetBouts).toBe(DEFAULT_TARGET_BOUTS);
   });
+
+  it("clamps the same way the summary does, so the two cannot disagree", () => {
+    // Otherwise a day could be scored against 100 under a card reading
+    // "Scored against 24 snacks".
+    const day = evenlySpread(5);
+    expect(daySpacing(day, DEFAULT_ACTIVE_WINDOW, 100).score).toBe(
+      daySpacing(day, DEFAULT_ACTIVE_WINDOW, MAX_TARGET_BOUTS).score,
+    );
+    expect(daySpacing(day, DEFAULT_ACTIVE_WINDOW, 0).score).toBe(
+      daySpacing(day, DEFAULT_ACTIVE_WINDOW, DEFAULT_TARGET_BOUTS).score,
+    );
+  });
 });
 
 describe("bout length", () => {
@@ -216,29 +228,54 @@ describe("bout length", () => {
     expect(day.timedBouts).toBe(1);
   });
 
-  it("reads the span of a bout the user logged in pieces", () => {
-    // Three movements between 18:00 and 18:05 is five minutes demonstrably
-    // spent at it, even though not one of them recorded a duration.
-    const day = daySpacing([at(18), at(18, 2), at(18, 5)]);
+  it("sums the recorded durations inside one bout", () => {
+    const day = daySpacing([
+      { minuteOfDay: at(18), movementSec: 60 },
+      { minuteOfDay: at(18, 2), movementSec: 90 },
+    ]);
     expect(day.bouts).toBe(1);
-    expect(day.medianBoutMinutes).toBe(5);
+    expect(day.medianBoutMinutes).toBe(2.5);
   });
 
-  it("takes whichever lower bound is larger", () => {
-    // A run logged at 12:00 for twenty minutes and a set at 12:05 inside the
-    // same bout: the span says 5, the recorded time says 20.
-    const day = daySpacing([{ minuteOfDay: at(12), movementSec: 1200 }, at(12, 5)]);
-    expect(day.bouts).toBe(1);
-    expect(day.medianBoutMinutes).toBe(20);
-  });
-
-  it("says nothing rather than zero for a lone untimed set", () => {
+  it("says nothing rather than zero when nothing recorded a duration", () => {
     // The app does not know whether ten push-ups took twenty seconds or five
     // minutes, and "0 minutes" would be a claim rather than an absence.
     const day = daySpacing([at(12)]);
     expect(day.medianBoutMinutes).toBeNull();
     expect(day.boutDurationMin).toEqual([null]);
     expect(day.timedBouts).toBe(0);
+  });
+
+  it("does not invent a length from the time a bout was spread over", () => {
+    // Three untimed movements between 18:00 and 18:05 is NOT five minutes of
+    // movement — it is about ninety seconds of work and three and a half
+    // minutes of standing about — so reporting 5 beside a two-minute threshold
+    // about actual walking would overstate it by the rest intervals.
+    const day = daySpacing([at(18), at(18, 2), at(18, 5)]);
+    expect(day.bouts).toBe(1);
+    expect(day.medianBoutMinutes).toBeNull();
+  });
+
+  it("does not move when the target does, because it is not about the target", () => {
+    // The regression this guards: bout length used to take the span of a bout
+    // as a second lower bound, and the merge window moves with the target — so
+    // the same circuit read as two ten-minute bouts at a target of five and six
+    // untimed ones at twenty, emptying a figure the setting has no business
+    // touching.
+    const circuit = [0, 5, 10, 15, 20, 25].map((m) => ({
+      minuteOfDay: at(18) + m,
+      movementSec: 60,
+    }));
+    const loose = daySpacing(circuit, DEFAULT_ACTIVE_WINDOW, 5);
+    const strict = daySpacing(circuit, DEFAULT_ACTIVE_WINDOW, 20);
+
+    // The grouping genuinely differs...
+    expect(loose.bouts).toBe(2);
+    expect(strict.bouts).toBe(6);
+    // ...but every recorded second is still counted, either way.
+    expect(loose.timedBouts).toBe(loose.bouts);
+    expect(strict.timedBouts).toBe(strict.bouts);
+    expect(strict.medianBoutMinutes).toBe(1);
   });
 
   it("does not change the score, which is about distribution alone", () => {
@@ -272,6 +309,7 @@ describe("bout length", () => {
     const bunched = daySpacing(
       [at(19), at(19, 30)].map((m) => ({ minuteOfDay: m, movementSec: 180 })),
     );
+    expect(bunched.bouts).toBe(2);
     expect(bunched.score!).toBeLessThan(0.3);
     const summary = summariseSpacing([["2026-09-01", bunched]]);
     expect(summary.timedBouts).toBe(2);
@@ -306,5 +344,13 @@ describe("labels", () => {
     expect(formatGap(45)).toBe("45m");
     expect(formatGap(120)).toBe("2h");
     expect(formatGap(380)).toBe("6h 20m");
+  });
+
+  it("carries the minutes rather than printing sixty of them", () => {
+    // Flooring the hours and rounding the minutes independently rendered
+    // 119.63 as "1h 60m" and 59.7 as "60m".
+    expect(formatGap(119.63)).toBe("2h");
+    expect(formatGap(59.7)).toBe("1h");
+    expect(formatBoutLength(0.99)).toBe("1m");
   });
 });

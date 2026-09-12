@@ -74,10 +74,10 @@ export function SpacingCard({ spacing }: { spacing: SpacingPayload }) {
             }
             note={
               spacing.medianBoutMinutes == null
-                ? "Nothing logged in this window recorded a length, so there is nothing to say."
+                ? "Nothing here recorded a duration. A run or a plank does; a set of ten push-ups does not."
                 : spacing.timedBouts === spacing.totalBouts
                   ? `Median across all ${spacing.totalBouts}. Reported, not scored.`
-                  : `Median of the ${spacing.timedBouts} of ${spacing.totalBouts} that recorded a length. Reported, not scored.`
+                  : `Median of the ${spacing.timedBouts} of ${spacing.totalBouts} that recorded a duration. Reported, not scored.`
             }
           />
         </dl>
@@ -126,8 +126,8 @@ export function SpacingCard({ spacing }: { spacing: SpacingPayload }) {
         Scored against {spacing.targetBouts} {spacing.targetBouts === 1 ? "snack" : "snacks"} spread
         evenly between {String(spacing.window.startHour).padStart(2, "0")}:00 and{" "}
         {String(spacing.window.endHour).padStart(2, "0")}:00, so both how often and how evenly you
-        trained count. Entries within {mergeMin} minutes of each other are one snack. Both numbers
-        are yours to set.
+        trained count. Anything logged within {mergeMin} minutes of a snack starting joins it. Both
+        numbers are yours to set.
       </p>
     </section>
   );

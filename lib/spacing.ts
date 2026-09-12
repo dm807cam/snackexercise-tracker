@@ -70,7 +70,8 @@
  * mean the app refusing to count a twenty-second stair sprint it was built to
  * encourage. So `medianBoutMinutes` sits beside the score and says nothing
  * about it, and the user can see for themselves that their typical snack lasts
- * twenty seconds. See `boutDuration` for what counts as evidence of a length.
+ * twenty seconds. It counts only time the entries actually recorded, and is
+ * null when they recorded none — see `boutDuration`.
  */
 
 /**
@@ -93,7 +94,7 @@ export const MIN_TARGET_BOUTS = 2;
 export const MAX_TARGET_BOUTS = 24;
 
 /**
- * Entries logged within this many minutes of each other are one bout.
+ * Entries logged within this many minutes of a bout's FIRST entry join it.
  *
  * Three movements logged in one go at the top of the stairs are one
  * interruption, not three, and counting them as three would let a single
@@ -164,12 +165,12 @@ export interface SpacingResult {
   /** Minutes since local midnight of each bout, ascending. */
   boutMinutes: number[];
   /**
-   * How long each bout lasted in minutes, aligned index-for-index with
-   * `boutMinutes`. Null where the app has no evidence either way.
+   * Movement minutes recorded by each bout, aligned index-for-index with
+   * `boutMinutes`. Null where nothing in the bout recorded a duration.
    */
   boutDurationMin: (number | null)[];
   /**
-   * Median length of the bouts whose length is known, or null when none is.
+   * Median movement time of the bouts that recorded one, or null when none did.
    *
    * Reported BESIDE the score rather than folded into it. Buffey et al. 2022
    * found two minutes of walking effective where one was not, so length plainly
@@ -180,7 +181,7 @@ export interface SpacingResult {
    * app deciding on their behalf that it did not happen.
    */
   medianBoutMinutes: number | null;
-  /** How many of `bouts` contributed a known length to that median. */
+  /** How many of `bouts` recorded a movement time, and so fed that median. */
   timedBouts: number;
   /** The window the day was actually scored against, after any expansion. */
   window: { startMin: number; endMin: number };
@@ -189,8 +190,6 @@ export interface SpacingResult {
 interface GroupedBout {
   /** First entry in the bout. */
   startMin: number;
-  /** Last entry in the bout; equal to `startMin` when the bout is one entry. */
-  endMin: number;
   /** Recorded movement seconds summed across the bout's entries. */
   movementSec: number;
 }
@@ -227,13 +226,8 @@ function groupBouts(
   for (const event of sorted) {
     const last = bouts[bouts.length - 1];
     if (last === undefined || event.minuteOfDay - last.startMin > mergeWithinMin) {
-      bouts.push({
-        startMin: event.minuteOfDay,
-        endMin: event.minuteOfDay,
-        movementSec: event.movementSec,
-      });
+      bouts.push({ startMin: event.minuteOfDay, movementSec: event.movementSec });
     } else {
-      last.endMin = event.minuteOfDay;
       last.movementSec += event.movementSec;
     }
   }
@@ -241,26 +235,30 @@ function groupBouts(
 }
 
 /**
- * How long a bout lasted, in minutes, or null when the app cannot say.
+ * How much movement a bout recorded, in minutes, or null when it recorded none.
  *
- * Two independent LOWER BOUNDS, and the larger wins because both are
- * observations rather than estimates:
+ * ONLY `durationSec` x sets, summed over the bout. An untimed entry — one set
+ * of ten push-ups — makes no contribution, and a bout of nothing but untimed
+ * entries is null rather than zero: the app does not know whether it took
+ * twenty seconds or five minutes, and "0" would be a claim rather than an
+ * absence.
  *
- * - the SPAN from the bout's first entry to its last. Three movements logged
- *   between 18:00 and 18:05 is five minutes the user demonstrably spent at it.
- * - the RECORDED movement time, `durationSec` x sets summed over the bout. A
- *   twenty-minute run is a single entry with a zero span and twenty real
- *   minutes in it.
- *
- * A lone untimed entry — one set of ten push-ups — has neither, and is null
- * rather than zero. The app does not know whether it took twenty seconds or
- * five minutes, and "0" would be a claim rather than an absence.
+ * An earlier version also took the SPAN from a bout's first entry to its last
+ * as a second lower bound, on the reasoning that three movements logged between
+ * 18:00 and 18:05 is five minutes demonstrably spent at it. Two things were
+ * wrong with that. It is not a bound on MOVEMENT — three sets over five minutes
+ * is more like ninety seconds of work and three and a half minutes of standing
+ * about — so reporting it beside the Buffey threshold, which is two minutes of
+ * actual walking, overstated by the width of the rest intervals. And it made
+ * the figure move with `targetBouts`, because the merge window does: the same
+ * circuit read as two ten-minute bouts at a target of five and six untimed ones
+ * at a target of twenty, so a setting the copy says only changes what a full
+ * mark is measured against silently emptied an unrelated number.
  */
 function boutDuration(bout: GroupedBout): number | null {
-  const minutes = Math.max(bout.endMin - bout.startMin, bout.movementSec / 60);
   // Two decimals, not one: these are often well under a minute, and rounding a
   // 45-second snack to 0.8 min would render it as "50s".
-  return minutes > 0 ? round2(minutes) : null;
+  return bout.movementSec > 0 ? round2(bout.movementSec / 60) : null;
 }
 
 function median(values: readonly number[]): number | null {
@@ -297,9 +295,12 @@ export function daySpacing(
   window: ActiveWindow = DEFAULT_ACTIVE_WINDOW,
   targetBouts: number = DEFAULT_TARGET_BOUTS,
 ): SpacingResult {
+  // Clamped here as well as in summariseSpacing, so a day's score and the
+  // summary drawn beside it cannot be measured against different targets.
+  const target = normaliseTargetBouts(targetBouts);
   // Merged on the CONFIGURED window, not the expanded one: an early run
   // widening the day must not also widen what counts as one bout.
-  const grouped = groupBouts(events, mergeWindowFor(targetBouts, window));
+  const grouped = groupBouts(events, mergeWindowFor(target, window));
   const bouts = grouped.map((bout) => bout.startMin);
   const durations = grouped.map(boutDuration);
   const known = durations.filter((d): d is number => d != null);
@@ -344,7 +345,7 @@ export function daySpacing(
     concentration += share * share;
   }
 
-  const segments = Math.max(gaps.length, targetBouts + 1);
+  const segments = Math.max(gaps.length, target + 1);
   const score = concentration > 0 ? 1 / segments / concentration : 1;
 
   return {
@@ -447,10 +448,16 @@ export function spacingLabel(score: number | null): string {
   return "One block";
 }
 
-/** "6h 20m" — a gap is read as a duration, never as 380. */
+/**
+ * "6h 20m" — a gap is read as a duration, never as 380.
+ *
+ * Rounded to whole minutes BEFORE the split, not after: flooring the hours and
+ * rounding the minutes independently renders 119.63 as "1h 60m".
+ */
 export function formatGap(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
   if (hours === 0) return `${mins}m`;
   return mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
 }
@@ -460,8 +467,10 @@ export function formatGap(minutes: number): string {
  * twenty-second stair sprint rounded to "0m" would read as a bug.
  */
 export function formatBoutLength(minutes: number): string {
-  if (minutes < 1) return `${Math.max(5, Math.round((minutes * 60) / 5) * 5)}s`;
-  return formatGap(minutes);
+  // Rounded to five seconds first, then handed on if that lands on a minute:
+  // 0.99 min rounds to 60 seconds, which must read "1m" and not "60s".
+  const seconds = Math.max(5, Math.round((minutes * 60) / 5) * 5);
+  return seconds < 60 ? `${seconds}s` : formatGap(seconds / 60);
 }
 
 function clampMinute(value: number): number {

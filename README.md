@@ -144,8 +144,9 @@ Volume is only half the claim this app makes. The other half is that the same
 work spread across the day beats the same work in one block, and until recently
 nothing here measured it.
 
-The **spacing score** does. Entries logged close together count as one snack;
-the snacks cut your waking window into gaps, and the score compares how
+The **spacing score** does. Anything logged within a few minutes of a snack
+starting joins it, so three movements at the top of the stairs are one snack and
+not three; the snacks cut your waking window into gaps, and the score compares how
 concentrated those gaps are against a day broken up evenly at your target
 frequency. Five evenly spread snacks score 100% at the default; one evening
 block scores under 30%, and so does a single well-placed session — frequency
@@ -170,11 +171,13 @@ merge.
 
 The day page shows today's snacks on a timeline; the stats page shows the
 average over the window, a histogram of which hours your training actually lands
-in, your longest quiet stretch, and how long a typical snack lasts. That last
-one is reported and **not** scored: Buffey found two minutes of walking
-effective where one was not, but that threshold is about walking breaks for
-glucose, and refusing to count a 20-second stair sprint would contradict the
-whole premise. You get to see the number and decide.
+in, your longest quiet stretch, and how much movement a typical snack recorded.
+That last one counts only the durations your entries actually carry — a run or a
+plank has one, a set of ten push-ups does not — and it is reported and **not**
+scored: Buffey found two minutes of walking effective where one was not, but
+that threshold is about walking breaks for glucose, and refusing to count a
+20-second stair sprint would contradict the whole premise. You get to see the
+number and decide.
 
 ### Getting stronger?
 

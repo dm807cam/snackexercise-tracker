@@ -414,10 +414,11 @@ export function SettingsView({
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
           />
           <p className="text-xs text-dim">
-            Entries within{" "}
+            Anything logged within{" "}
             {mergeWindowFor(savedBouts, { startHour: dayStartHour, endHour: dayEndHour })} minutes of
-            each other count as one snack. That moves with this number — otherwise a stricter target
-            would be unreachable, because the merge would swallow the very breaks it asks for.
+            a snack starting joins it, so three movements at the top of the stairs are one snack and
+            not three. That window moves with this number — otherwise a stricter target would be
+            unreachable, because the merge would swallow the very breaks it asks for.
           </p>
         </Field>
       </Section>

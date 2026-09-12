@@ -44,10 +44,9 @@ the one an early run expanded, so a 05:30 start cannot widen what counts as one
 bout.
 
 **Bout length is reported, not scored.** `medianBoutMinutes` sits beside the
-score with the count it was taken over. A bout's length is the larger of two
-lower bounds — the span from its first logged entry to its last, and the
-`durationSec × sets` its entries actually recorded — and is `null` when it has
-neither.
+score with the count it was taken over. It is the `durationSec × sets` a bout's
+entries actually recorded, summed — nothing inferred — and `null` when they
+recorded none.
 
 **The longest quiet stretch is promoted** from a clause in the subtitle to a
 figure beside the score, with typical snack length next to it.
@@ -77,6 +76,12 @@ another literature's exposure, and would contradict the app's own premise. The
 number is shown so the user can see their typical snack is 20 seconds long, and
 decide for themselves.
 
+**Recorded time only, and `null` when there is none.** A set of ten push-ups
+records no duration, so for a user who only lifts this figure reads "—" forever.
+That is the true answer, and it is the answer the issue asked for: the app
+cannot tell a 20-second interruption from a 5-minute one unless the entry says
+so.
+
 **Longest gap promoted** because prolonged unbroken sitting is what the
 observational work implicates, and because "7h 40m" is something a person can
 act on in a way "42%" is not.
@@ -101,6 +106,18 @@ in a value the user could not reasonably supply, whereas this one would put an
 invented number under a label reading "typical snack", where it would be read as
 a measurement. `null` is the true answer.
 
+**Taking the span of a bout — first entry to last — as a second lower bound on
+its length.** Written, then removed under review. Two things were wrong with it.
+It is not a bound on *movement*: three sets logged between 18:00 and 18:05 is
+about ninety seconds of work and three and a half minutes of standing about, so
+reporting five beside the Buffey threshold — two minutes of actual walking —
+overstates by the width of the rest intervals, which is the same species of
+overclaim this ADR exists to fix. And because the merge window moves with
+`targetBouts`, so did the span: the same six-entry circuit read as two
+ten-minute bouts at a target of 5 and six untimed ones at 20, so a setting whose
+copy promises only to change what a full mark is measured against silently
+emptied an unrelated figure.
+
 **Deriving the merge window from the expanded day.** Simpler — one window, used
 everywhere — but it means an early run silently widens what counts as one bout,
 so the same two evening entries merge on a day the user went for a dawn run and
@@ -115,6 +132,10 @@ tests referenced it.
 at the default, so two entries exactly 15 minutes apart are now two bouts rather
 than one. That raises a small number of past days. No migration: the score is
 derived at read time, as it always was.
+
+**"Typical snack" will read "—" for a user who only logs sets and reps.** That
+is the honest state, and the card says which kinds of entry carry a duration
+rather than leaving a bare dash.
 
 The stats card gains two figures and loses the sentence that asserted "every
 couple of hours" and "a quarter of an hour" as facts — both now read from the

@@ -508,7 +508,7 @@ test.describe("how often to break the day up", () => {
     try {
       await page.goto("/stats");
       await expect(page.getByText(/Scored against 5 snacks spread evenly/)).toBeVisible();
-      await expect(page.getByText(/within 14 minutes of each other/)).toBeVisible();
+      await expect(page.getByText(/within 14 minutes of a snack starting/)).toBeVisible();
 
       await page.goto("/settings");
       await page.getByLabel("Snacks a day to aim for").fill("20");
@@ -520,12 +520,16 @@ test.describe("how often to break the day up", () => {
       await expect(page.getByText(/Scored against 20 snacks spread evenly/)).toBeVisible();
       // The merge window follows the target, or the stricter aim would be
       // unreachable: at twenty a day the ideal gap is 40 minutes.
-      await expect(page.getByText(/within 4 minutes of each other/)).toBeVisible();
+      await expect(page.getByText(/within 4 minutes of a snack starting/)).toBeVisible();
     } finally {
-      await page.goto("/settings");
-      await page.getByLabel("Snacks a day to aim for").fill("5");
-      await page.getByLabel("Hard sets per muscle, per week").click();
-      await expect(page.getByLabel("Snacks a day to aim for")).toHaveValue("5");
+      // Restored through the API rather than the form: a cleanup that depends
+      // on hydration, a blur handler and a toast can leave 20 stored for
+      // whatever runs next, and on a retry that fails the first assertion for
+      // a reason that has nothing to do with what is being tested.
+      const restored = await page.request.put("/api/settings", {
+        data: { targetBouts: "5" },
+      });
+      expect(restored.ok()).toBe(true);
     }
   });
 });
