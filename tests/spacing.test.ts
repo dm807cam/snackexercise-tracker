@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ACTIVE_WINDOW,
+  DEFAULT_TARGET_BOUTS,
+  MAX_TARGET_BOUTS,
+  MIN_TARGET_BOUTS,
   daySpacing,
+  formatBoutLength,
   formatGap,
+  mergeWindowFor,
+  normaliseTargetBouts,
   spacingLabel,
   summariseSpacing,
   toBouts,
-  TARGET_BOUTS,
 } from "@/lib/spacing";
 
 /** 08:00 to 22:00 by default: fourteen hours, 840 minutes. */
@@ -42,9 +47,9 @@ describe("toBouts", () => {
 
 describe("daySpacing", () => {
   it("scores a perfectly spread day at the target frequency as 1", () => {
-    const result = daySpacing(evenlySpread(TARGET_BOUTS));
+    const result = daySpacing(evenlySpread(DEFAULT_TARGET_BOUTS));
     expect(result.score).toBe(1);
-    expect(result.bouts).toBe(TARGET_BOUTS);
+    expect(result.bouts).toBe(DEFAULT_TARGET_BOUTS);
   });
 
   it("scores more than the target, still evenly spread, as 1", () => {
@@ -146,6 +151,145 @@ describe("summariseSpacing", () => {
     expect(summary.score).toBeNull();
     expect(summary.longestGapMin).toBeNull();
     expect(summary.byHour).toHaveLength(24);
+  });
+});
+
+describe("a configurable target", () => {
+  it("clamps a stored value rather than scoring against nonsense", () => {
+    expect(normaliseTargetBouts(8)).toBe(8);
+    expect(normaliseTargetBouts(0)).toBe(DEFAULT_TARGET_BOUTS);
+    expect(normaliseTargetBouts(null)).toBe(DEFAULT_TARGET_BOUTS);
+    expect(normaliseTargetBouts(Number.NaN)).toBe(DEFAULT_TARGET_BOUTS);
+    expect(normaliseTargetBouts(1)).toBe(MIN_TARGET_BOUTS);
+    expect(normaliseTargetBouts(400)).toBe(MAX_TARGET_BOUTS);
+    expect(normaliseTargetBouts(5.6)).toBe(6);
+  });
+
+  it("moves what counts as a full mark", () => {
+    // Five evenly spread bouts is a perfect day at the default and a middling
+    // one for somebody chasing the sedentary-interruption dose.
+    const day = evenlySpread(5);
+    expect(daySpacing(day, DEFAULT_ACTIVE_WINDOW, DEFAULT_TARGET_BOUTS).score).toBe(1);
+    expect(daySpacing(day, DEFAULT_ACTIVE_WINDOW, 15).score!).toBeLessThan(0.45);
+  });
+
+  it("still scores a perfectly spread day at the chosen target as 1", () => {
+    for (const target of [2, 5, 12, 20]) {
+      expect(daySpacing(evenlySpread(target), DEFAULT_ACTIVE_WINDOW, target).score).toBe(1);
+    }
+  });
+
+  it("shrinks the merge window as the target rises, so a stricter aim stays reachable", () => {
+    // At a target of twenty the ideal gap is 40 minutes; a fixed fifteen-minute
+    // merge would swallow a third of every genuine break.
+    const wide = mergeWindowFor(DEFAULT_TARGET_BOUTS);
+    const tight = mergeWindowFor(20);
+    expect(wide).toBeGreaterThan(tight);
+    expect(tight).toBeGreaterThanOrEqual(3);
+
+    // And the default is near enough the fifteen minutes it replaces that no
+    // already-logged day is rescored meaningfully.
+    expect(wide).toBeGreaterThanOrEqual(13);
+    expect(wide).toBeLessThanOrEqual(15);
+  });
+
+  it("merges on the configured window, not the one an early run expanded", () => {
+    // A 05:30 session widens the scored day from 14 hours to 16.5. If the merge
+    // window were derived from the expanded day it would widen too — from 14
+    // minutes to 15 — and these two evening entries would silently become one.
+    expect(mergeWindowFor(DEFAULT_TARGET_BOUTS)).toBe(14);
+    expect(daySpacing([at(19), at(19, 15)]).bouts).toBe(2);
+    expect(daySpacing([at(5, 30), at(19), at(19, 15)]).bouts).toBe(3);
+  });
+
+  it("reports the target it was measured against", () => {
+    expect(summariseSpacing([], DEFAULT_ACTIVE_WINDOW, 12).targetBouts).toBe(12);
+    expect(summariseSpacing([], DEFAULT_ACTIVE_WINDOW, 0).targetBouts).toBe(DEFAULT_TARGET_BOUTS);
+  });
+});
+
+describe("bout length", () => {
+  it("reads a recorded duration, scaled by the set count", () => {
+    // durationSec is stored per set, the way lib/cardio.ts reads it.
+    const day = daySpacing([{ minuteOfDay: at(12), movementSec: 40 * 6 }]);
+    expect(day.medianBoutMinutes).toBe(4);
+    expect(day.timedBouts).toBe(1);
+  });
+
+  it("reads the span of a bout the user logged in pieces", () => {
+    // Three movements between 18:00 and 18:05 is five minutes demonstrably
+    // spent at it, even though not one of them recorded a duration.
+    const day = daySpacing([at(18), at(18, 2), at(18, 5)]);
+    expect(day.bouts).toBe(1);
+    expect(day.medianBoutMinutes).toBe(5);
+  });
+
+  it("takes whichever lower bound is larger", () => {
+    // A run logged at 12:00 for twenty minutes and a set at 12:05 inside the
+    // same bout: the span says 5, the recorded time says 20.
+    const day = daySpacing([{ minuteOfDay: at(12), movementSec: 1200 }, at(12, 5)]);
+    expect(day.bouts).toBe(1);
+    expect(day.medianBoutMinutes).toBe(20);
+  });
+
+  it("says nothing rather than zero for a lone untimed set", () => {
+    // The app does not know whether ten push-ups took twenty seconds or five
+    // minutes, and "0 minutes" would be a claim rather than an absence.
+    const day = daySpacing([at(12)]);
+    expect(day.medianBoutMinutes).toBeNull();
+    expect(day.boutDurationMin).toEqual([null]);
+    expect(day.timedBouts).toBe(0);
+  });
+
+  it("does not change the score, which is about distribution alone", () => {
+    const bare = daySpacing(evenlySpread(5));
+    const timed = daySpacing(evenlySpread(5).map((m) => ({ minuteOfDay: m, movementSec: 600 })));
+    expect(timed.score).toBe(bare.score);
+    expect(timed.bouts).toBe(bare.bouts);
+  });
+
+  it("pools bout lengths across the window rather than averaging per-day medians", () => {
+    // A day with one long bout must not outweigh a day with six short ones.
+    const summary = summariseSpacing([
+      ["2026-09-01", daySpacing([{ minuteOfDay: at(12), movementSec: 3600 }])],
+      [
+        "2026-09-02",
+        daySpacing([at(9), at(11), at(13), at(15), at(17)].map((m) => ({
+          minuteOfDay: m,
+          movementSec: 120,
+        }))),
+      ],
+    ]);
+    expect(summary.timedBouts).toBe(6);
+    expect(summary.totalBouts).toBe(6);
+    expect(summary.medianBoutMinutes).toBe(2);
+  });
+
+  it("counts a badly spread day's snacks, which are the ones worth looking at", () => {
+    // How long a snack lasts is a fact about the snack. A day that scored 0.12
+    // for being one evening block still says its bouts were three minutes long,
+    // and dropping it would bias the median toward the days that went well.
+    const bunched = daySpacing(
+      [at(19), at(19, 30)].map((m) => ({ minuteOfDay: m, movementSec: 180 })),
+    );
+    expect(bunched.score!).toBeLessThan(0.3);
+    const summary = summariseSpacing([["2026-09-01", bunched]]);
+    expect(summary.timedBouts).toBe(2);
+    expect(summary.medianBoutMinutes).toBe(3);
+  });
+
+  it("keeps a sub-minute snack legible rather than rounding it to nothing", () => {
+    // A 45-second snack is the format this app was built for; showing it as
+    // "0m", or as "50s" through a one-decimal round, would read as a bug.
+    const day = daySpacing([{ minuteOfDay: at(12), movementSec: 45 }]);
+    expect(day.medianBoutMinutes).toBe(0.75);
+    expect(formatBoutLength(day.medianBoutMinutes!)).toBe("45s");
+  });
+
+  it("reports a short snack in seconds rather than rounding it to nothing", () => {
+    expect(formatBoutLength(0.5)).toBe("30s");
+    expect(formatBoutLength(2)).toBe("2m");
+    expect(formatBoutLength(75)).toBe("1h 15m");
   });
 });
 

@@ -6,6 +6,7 @@ import {
   getDaySummary,
   getExercises,
   getRecentExerciseIds,
+  getTargetBouts,
   loadStats,
 } from "@/lib/queries";
 import { getAppConfig } from "@/lib/app-config";
@@ -37,11 +38,12 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   // advice about a Tuesday in August, which is nobody's question.
   let suggestion: Suggestion | null = null;
   if (date === config.today) {
-    const [stats, activeWindow] = await Promise.all([
+    const [stats, activeWindow, targetBouts] = await Promise.all([
       // No previous-window comparison: the suggestion never reads it, and this
       // runs again after every logged, edited or deleted set.
       loadStats(SUGGESTION_WINDOW, config.today, config.timeZone, false),
       getActiveWindow(),
+      getTargetBouts(),
     ]);
 
     suggestion = buildSuggestion({
@@ -57,6 +59,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         nowMin: minutesOfDayInZone(new Date(), config.timeZone),
         boutMinutes: summary.spacing.boutMinutes,
         window: activeWindow,
+        targetBouts,
       },
     });
   }

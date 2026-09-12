@@ -144,18 +144,37 @@ Volume is only half the claim this app makes. The other half is that the same
 work spread across the day beats the same work in one block, and until recently
 nothing here measured it.
 
-The **spacing score** does. Entries within a quarter of an hour of each other
-count as one bout; the bouts cut your waking window into gaps, and the score
-compares how concentrated those gaps are against a day broken up roughly every
-couple of hours. Five evenly spread bouts score 100%; one evening block scores
-under 30%, and so does a single well-placed session — frequency counts, not just
-evenness. A day with nothing logged scores nothing at all rather than zero,
-because a rest day is not a badly spread day.
+The **spacing score** does. Entries logged close together count as one snack;
+the snacks cut your waking window into gaps, and the score compares how
+concentrated those gaps are against a day broken up evenly at your target
+frequency. Five evenly spread snacks score 100% at the default; one evening
+block scores under 30%, and so does a single well-placed session — frequency
+counts, not just evenness. A day with nothing logged scores nothing at all
+rather than zero, because a rest day is not a badly spread day.
 
-The day page shows today's bouts on a timeline; the stats page shows the average
-over the window with a histogram of which hours your training actually lands in.
-Set your waking hours under Settings — scoring a night-shift worker's 22:00
-session as badly timed would just make the number something to ignore.
+**It measures how your training was distributed, not how much you sat.** Those
+are different exposures with different doses, and only the first is one this app
+can see. The dose for breaking up sitting is roughly every 20–30 minutes, in 2–5
+minute bouts (Dempsey 2016; Buffey 2022; Dunstan 2012) — fifteen to twenty-five
+interruptions a day, most of them standing up to make tea, none of which will
+ever be logged here. The default of five comes from the exercise-snacks work
+this app's format actually descends from: ~3 vigorous bouts a day in Jenkins
+2019 and Islam 2022, 3–4 in Stamatakis 2022's VILPA analysis.
+
+Both numbers are yours. Set your waking hours under Settings — scoring a
+night-shift worker's 22:00 session as badly timed would just make the number
+something to ignore — and set the snacks-a-day target if five is not what you
+are aiming at. The window for merging entries into one snack moves with the
+target, so a stricter aim stays reachable instead of being swallowed by the
+merge.
+
+The day page shows today's snacks on a timeline; the stats page shows the
+average over the window, a histogram of which hours your training actually lands
+in, your longest quiet stretch, and how long a typical snack lasts. That last
+one is reported and **not** scored: Buffey found two minutes of walking
+effective where one was not, but that threshold is about walking breaks for
+glucose, and refusing to count a 20-second stair sprint would contradict the
+whole premise. You get to see the number and decide.
 
 ### Getting stronger?
 

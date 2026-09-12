@@ -31,6 +31,12 @@ import {
   presetTargets,
   type Targets,
 } from "@/lib/targets";
+import {
+  MAX_TARGET_BOUTS,
+  MIN_TARGET_BOUTS,
+  mergeWindowFor,
+  normaliseTargetBouts,
+} from "@/lib/spacing";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
 import { ModelPicker } from "./ModelPicker";
@@ -51,6 +57,7 @@ export function SettingsView({
     stepsForHalfRing: number | null;
     dayStartHour: number;
     dayEndHour: number;
+    targetBouts: number;
     perMuscleTarget: number;
     targets: Targets;
     physiology: Physiology;
@@ -67,6 +74,10 @@ export function SettingsView({
   const [stepBaseline, setStepBaseline] = useState(initial.stepBaseline);
   const [dayStartHour, setDayStartHour] = useState(initial.dayStartHour);
   const [dayEndHour, setDayEndHour] = useState(initial.dayEndHour);
+  const [targetBouts, setTargetBouts] = useState(String(initial.targetBouts));
+  // Tracked the way `savedTarget` is, and for the same reason: `initial` only
+  // catches up once the router refresh after a save lands.
+  const [savedBouts, setSavedBouts] = useState(initial.targetBouts);
   const [perMuscleTarget, setPerMuscleTarget] = useState(String(initial.perMuscleTarget));
   // What is actually stored, tracked here rather than read back off `initial`:
   // that prop only changes once the router refresh after a save has landed, so
@@ -377,6 +388,37 @@ export function SettingsView({
               }}
             />
           </div>
+        </Field>
+
+        <Field
+          label="Snacks a day to aim for"
+          htmlFor="target-bouts"
+          hint={`What a full mark is measured against. Five is the default because that is roughly the exercise-snack dose the research uses — three or four short bouts a day. It is deliberately not the dose for breaking up sitting, which is nearer fifteen to twenty-five a day and mostly consists of standing up to make tea: this app can only see what you log, so it scores how well your training was spread, not how much you sat. Raise it if you want to be measured against something stricter.`}
+        >
+          <input
+            id="target-bouts"
+            type="number"
+            inputMode="numeric"
+            min={MIN_TARGET_BOUTS}
+            max={MAX_TARGET_BOUTS}
+            value={targetBouts}
+            onChange={(e) => setTargetBouts(e.target.value)}
+            onBlur={() => {
+              const stored = normaliseTargetBouts(Number(targetBouts));
+              setTargetBouts(String(stored));
+              if (stored === savedBouts) return;
+              setSavedBouts(stored);
+              save({ targetBouts: String(stored) });
+            }}
+            className="w-full rounded-lg px-3 py-3 text-base tabular-nums"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          />
+          <p className="text-xs text-dim">
+            Entries within{" "}
+            {mergeWindowFor(savedBouts, { startHour: dayStartHour, endHour: dayEndHour })} minutes of
+            each other count as one snack. That moves with this number — otherwise a stricter target
+            would be unreachable, because the merge would swallow the very breaks it asks for.
+          </p>
         </Field>
       </Section>
 

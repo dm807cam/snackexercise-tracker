@@ -6,6 +6,7 @@ import {
   spacingNudge,
   type ExerciseChoice,
 } from "@/lib/suggest";
+import { DEFAULT_TARGET_BOUTS } from "@/lib/spacing";
 import { axisForMuscle, type AxisSlug } from "@/lib/muscles";
 import { AXES } from "@/lib/muscles";
 import type { AxisStat } from "@/lib/scoring";
@@ -229,6 +230,27 @@ describe("spacingNudge", () => {
     expect(spacingNudge({ nowMin: 15 * 60, boutMinutes: [], window })).toBe(
       "Nothing logged so far today",
     );
+  });
+
+  it("speaks up sooner for someone aiming at more snacks a day", () => {
+    // The nudge and the score must stay the same opinion stated twice: raise
+    // the target and the day is being scored against more frequent breaks, so
+    // the gap the nudge tolerates has to shrink with it.
+    // 45 minutes since the last snack: well inside the 2h20m ideal gap at the
+    // default target, well past the 40-minute one at twenty a day.
+    const quiet = { nowMin: 13 * 60 + 15, boutMinutes: [12 * 60 + 30], window };
+    expect(spacingNudge(quiet)).toBeNull();
+    expect(spacingNudge({ ...quiet, targetBouts: 20 })).toBe("45m since your last snack");
+  });
+
+  it("falls back to the default target when none is configured", () => {
+    const now = { nowMin: 16 * 60, boutMinutes: [12 * 60], window };
+    expect(spacingNudge({ ...now, targetBouts: DEFAULT_TARGET_BOUTS })).toBe(
+      spacingNudge(now),
+    );
+    // A stored zero is not "never nudge me"; it is a value getTargetBouts
+    // refuses, and the nudge has to refuse it the same way.
+    expect(spacingNudge({ ...now, targetBouts: 0 })).toBe(spacingNudge(now));
   });
 });
 
