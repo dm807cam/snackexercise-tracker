@@ -498,6 +498,43 @@ test.describe("what you are aiming at", () => {
 });
 
 /**
+ * The spacing target. Worth a pass through the real app because the promise is
+ * that the setting reaches the stats page's copy as well as its arithmetic —
+ * the card used to assert "every couple of hours" and "a quarter of an hour" as
+ * facts, whatever the user had chosen.
+ */
+test.describe("how often to break the day up", () => {
+  test("the snacks-a-day target reaches the stats card", async ({ page }) => {
+    try {
+      await page.goto("/stats");
+      await expect(page.getByText(/Scored against 5 snacks spread evenly/)).toBeVisible();
+      await expect(page.getByText(/within 14 minutes of a snack starting/)).toBeVisible();
+
+      await page.goto("/settings");
+      await page.getByLabel("Snacks a day to aim for").fill("20");
+      // Blur, which is what commits the field.
+      await page.getByLabel("Hard sets per muscle, per week").click();
+      await expect(page.getByText("Saved")).toBeVisible();
+
+      await page.goto("/stats");
+      await expect(page.getByText(/Scored against 20 snacks spread evenly/)).toBeVisible();
+      // The merge window follows the target, or the stricter aim would be
+      // unreachable: at twenty a day the ideal gap is 40 minutes.
+      await expect(page.getByText(/within 4 minutes of a snack starting/)).toBeVisible();
+    } finally {
+      // Restored through the API rather than the form: a cleanup that depends
+      // on hydration, a blur handler and a toast can leave 20 stored for
+      // whatever runs next, and on a retry that fails the first assertion for
+      // a reason that has nothing to do with what is being tested.
+      const restored = await page.request.put("/api/settings", {
+        data: { targetBouts: "5" },
+      });
+      expect(restored.ok()).toBe(true);
+    }
+  });
+});
+
+/**
  * The two numbers that turn a heart rate into an intensity. Worth an end-to-end
  * pass because the promise is specifically that entering them changes what the
  * app shows, and that leaving them blank changes nothing.

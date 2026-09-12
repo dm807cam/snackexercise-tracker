@@ -38,7 +38,12 @@
 import { GUIDELINE_TARGETS } from "./targets";
 import { type AxisSlug, axisLabel } from "./muscles";
 import type { AxisStat } from "./scoring";
-import { DEFAULT_ACTIVE_WINDOW, TARGET_BOUTS, formatGap, type ActiveWindow } from "./spacing";
+import {
+  DEFAULT_ACTIVE_WINDOW,
+  formatGap,
+  normaliseTargetBouts,
+  type ActiveWindow,
+} from "./spacing";
 import { volumeDeficit } from "./volume";
 
 /** Days after which an axis is as stale as it is going to get, for scoring. */
@@ -190,14 +195,18 @@ export interface SpacingNow {
   /** Bout times so far today, minutes since local midnight. */
   boutMinutes: readonly number[];
   window?: ActiveWindow;
+  /** The user's configured bouts-a-day target; the default when unset. */
+  targetBouts?: number;
 }
 
 /**
  * The timing half of the bar: whether it is time for a snack at all.
  *
  * The threshold is the ideal spacing itself — the active window divided into
- * TARGET_BOUTS + 1 segments — so the nudge and the spacing score are the same
- * opinion stated twice, and cannot drift apart.
+ * targetBouts + 1 segments — so the nudge and the spacing score are the same
+ * opinion stated twice, and cannot drift apart. That includes the target
+ * itself: raise it in Settings and the nudge speaks up sooner, because the day
+ * it is now being scored against is broken up more often.
  */
 export function spacingNudge(now: SpacingNow): string | null {
   const window = now.window ?? DEFAULT_ACTIVE_WINDOW;
@@ -208,7 +217,7 @@ export function spacingNudge(now: SpacingNow): string | null {
   // Outside waking hours the app has no business asking for another set.
   if (now.nowMin < startMin || now.nowMin > endMin) return null;
 
-  const idealGap = (endMin - startMin) / (TARGET_BOUTS + 1);
+  const idealGap = (endMin - startMin) / (normaliseTargetBouts(now.targetBouts) + 1);
   const last = now.boutMinutes.length > 0 ? Math.max(...now.boutMinutes) : null;
   const since = now.nowMin - (last ?? startMin);
 

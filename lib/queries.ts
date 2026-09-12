@@ -60,10 +60,30 @@ import {
 import {
   DEFAULT_ACTIVE_WINDOW,
   daySpacing,
+  normaliseTargetBouts,
   summariseSpacing,
   type ActiveWindow,
+  type BoutEvent,
   type SpacingResult,
 } from "./spacing";
+
+/**
+ * An entry as the spacing metric reads it: when it happened, and how much
+ * movement it recorded.
+ *
+ * `durationSec` is stored PER SET, the way lib/cardio.ts reads it, so six
+ * 40-second carries are four minutes of movement rather than forty seconds.
+ */
+function spacingEvent(timeZone: string | undefined) {
+  return (entry: {
+    performedAt: Date;
+    sets: number;
+    durationSec: number | null;
+  }): BoutEvent => ({
+    minuteOfDay: minutesOfDayInZone(entry.performedAt, timeZone),
+    movementSec: entry.durationSec != null ? entry.durationSec * Math.max(1, entry.sets) : null,
+  });
+}
 
 /** The exercise fields every scoring path needs. */
 const entryInclude = {
@@ -157,14 +177,16 @@ export async function getDaySummary(
   /** The weekly doses the day's rings are a seventh of. */
   targets: Targets;
 }> {
-  const [entries, walking, activeWindow, stepSettings, targets, physiology] = await Promise.all([
-    getEntriesForDate(date),
-    getWalking(date),
-    getActiveWindow(),
-    getStepSettings(today),
-    getTargets(),
-    getPhysiology(),
-  ]);
+  const [entries, walking, activeWindow, targetBouts, stepSettings, targets, physiology] =
+    await Promise.all([
+      getEntriesForDate(date),
+      getWalking(date),
+      getActiveWindow(),
+      getTargetBouts(),
+      getStepSettings(today),
+      getTargets(),
+      getPhysiology(),
+    ]);
 
   // Read against the day being viewed, so a heart rate is scored for the age
   // the user was, and so the day page and the stats page cannot disagree about
@@ -192,10 +214,7 @@ export async function getDaySummary(
     ),
     effectiveSets: round(totalEffectiveSets(summary.muscles)),
     hardSets: round(totalHardSets(entries)),
-    spacing: daySpacing(
-      entries.map((e) => minutesOfDayInZone(e.performedAt, timeZone)),
-      activeWindow,
-    ),
+    spacing: daySpacing(entries.map(spacingEvent(timeZone)), activeWindow, targetBouts),
     targets,
   };
 }
@@ -221,6 +240,21 @@ export async function getActiveWindow(): Promise<ActiveWindow> {
     : DEFAULT_ACTIVE_WINDOW.endHour;
 
   return end > start ? { startHour: start, endHour: end } : DEFAULT_ACTIVE_WINDOW;
+}
+
+/**
+ * How many bouts a day the spacing score is measured against.
+ *
+ * Configurable for the reason the window is: five is the exercise-snacks dose
+ * this app's format descends from, and someone chasing the far more frequent
+ * sedentary-interruption dose should be able to say so and have the score, the
+ * merge window and the nudge all move with them. See lib/spacing.ts.
+ */
+export async function getTargetBouts(): Promise<number> {
+  const settings = await getSettings();
+  // An unset setting is `Number("") === 0`, which normaliseTargetBouts already
+  // reads as "no answer" rather than as a target of none.
+  return normaliseTargetBouts(Number(settings.targetBouts));
 }
 
 /**
@@ -664,6 +698,7 @@ export async function loadStats(
     walking,
     stepSettings,
     activeWindow,
+    targetBouts,
     perMuscleTarget,
     progress,
     targets,
@@ -676,6 +711,7 @@ export async function loadStats(
     getWalkingInRange(current.start, current.end),
     getStepSettings(today),
     getActiveWindow(),
+    getTargetBouts(),
     getPerMuscleTarget(),
     // A stall is a slow signal: a movement cannot be shown as flat for nine
     // weeks by a seven-day window. So progression always looks back far enough
@@ -698,17 +734,20 @@ export async function loadStats(
     intensityContext,
   });
 
-  const minutesByDate = new Map<string, number[]>();
+  const eventsByDate = new Map<string, BoutEvent[]>();
+  const toEvent = spacingEvent(timeZone);
   for (const entry of currentEntries) {
-    const minutes = minutesByDate.get(entry.localDate);
-    const at = minutesOfDayInZone(entry.performedAt, timeZone);
-    if (minutes) minutes.push(at);
-    else minutesByDate.set(entry.localDate, [at]);
+    const events = eventsByDate.get(entry.localDate);
+    if (events) events.push(toEvent(entry));
+    else eventsByDate.set(entry.localDate, [toEvent(entry)]);
   }
 
   const spacing = summariseSpacing(
-    [...minutesByDate].map(([date, minutes]) => [date, daySpacing(minutes, activeWindow)] as const),
+    [...eventsByDate].map(
+      ([date, events]) => [date, daySpacing(events, activeWindow, targetBouts)] as const,
+    ),
     activeWindow,
+    targetBouts,
   );
 
   return buildStats({

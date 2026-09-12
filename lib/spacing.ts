@@ -6,8 +6,34 @@
  * now nothing in it measured whether the snacks were actually scattered. Thirty
  * effective sets at 19:00 and thirty effective sets spread over six visits to
  * the pull-up bar score identically everywhere else in the app, and they are
- * not the same thing: breaking up sedentary time is a separate exposure from
- * total volume, with its own effects on glycaemic control and its own dose.
+ * not the same thing.
+ *
+ * WHAT THIS SCORE IS, AND IS NOT. It measures HOW WELL YOUR TRAINING WAS
+ * DISTRIBUTED. It does not measure sedentary interruption, and the distinction
+ * is not pedantry — the two have different doses and only one of them is
+ * something this app can observe.
+ *
+ * The sedentary-interruption literature is about interrupting sitting BY ANY
+ * MEANS, and its dose is roughly every 20-30 minutes during sitting, in bouts
+ * of 2-5 minutes: Dempsey et al. 2016, Diabetes Care (3 min every 30);
+ * Buffey et al. 2022, Sports Medicine (2 min every 20-30 was enough, 1 min
+ * every 30 was not); Dunstan et al. 2012, Diabetes Care. That is on the order
+ * of 15-25 interruptions across a working day. Standing up to make tea is one
+ * of them, and nothing in this app will ever record it.
+ *
+ * So an earlier version of this header justified the metric by citing that
+ * literature directly, which overclaimed: with a target of five bouts it was
+ * measuring something an order of magnitude less frequent than the protocols
+ * it named, using only logged training as evidence. The exposure it can
+ * actually see is training distribution, and that is what it now says.
+ *
+ * The target it IS anchored to is the exercise-snacks work — Jenkins et al.
+ * 2019, Appl Physiol Nutr Metab and Islam et al. 2022 use ~3 vigorous bouts a
+ * day; Stamatakis et al. 2022's VILPA finding is 3-4 short vigorous bouts a
+ * day. See DEFAULT_TARGET_BOUTS.
+ *
+ * A user who wants to chase the sedentary-interruption dose instead can say so:
+ * the target is configurable, and everything derived from it moves with it.
  *
  * The measure has to satisfy two things at once, because the user asked for
  * both: MORE bouts is better, and EVENLY SPACED bouts are better. Evenness
@@ -19,7 +45,7 @@
  * consecutive bouts, last bout to window end). Let p_i be each gap as a
  * fraction of the window, so the p_i sum to 1. Then
  *
- *     score = (1 / m) / sum(p_i^2),    m = max(n + 1, TARGET_BOUTS + 1)
+ *     score = (1 / m) / sum(p_i^2),    m = max(n + 1, targetBouts + 1)
  *
  * sum(p_i^2) is the Simpson concentration of the gaps: it is 1/(n+1) when the
  * gaps are all equal and approaches 1 when one gap swallows the day. Dividing
@@ -28,28 +54,73 @@
  *
  * The `m` floor is what makes frequency count. Without it the ideal is measured
  * against however many bouts you happened to do, and one bout at noon scores
- * 0.85 for the crime of being unclusterable. With a floor of TARGET_BOUTS + 1
+ * 0.85 for the crime of being unclusterable. With a floor of targetBouts + 1
  * segments, a day is scored against a day that trained every ~2.8 waking hours,
  * and one bout scores about 0.28 — which is the honest answer to "how well was
  * this day broken up".
  *
  * Deliberately NOT weighted by how much each bout contained. This is a measure
- * of how often you interrupted sitting, and a two-minute set of squats
- * interrupts it exactly as well as twenty minutes of them. Volume is already
- * measured, thoroughly, everywhere else.
+ * of DISTRIBUTION, and a two-minute set of squats breaks a day up exactly as
+ * well as twenty minutes of them do. Volume is already measured, thoroughly,
+ * everywhere else.
+ *
+ * BOUT LENGTH IS REPORTED, NOT SCORED. Buffey found two minutes of walking
+ * effective where one minute was not, so length is not nothing — but that
+ * threshold is about walking breaks for glucose, and applying it here would
+ * mean the app refusing to count a twenty-second stair sprint it was built to
+ * encourage. So `medianBoutMinutes` sits beside the score and says nothing
+ * about it, and the user can see for themselves that their typical snack lasts
+ * twenty seconds. It counts only time the entries actually recorded, and is
+ * null when they recorded none — see `boutDuration`.
  */
-
-/** Bouts a well-broken-up day contains — one about every 2.8 waking hours. */
-export const TARGET_BOUTS = 5;
 
 /**
- * Entries logged within this many minutes of each other are one bout.
+ * Bouts a well-broken-up training day contains.
+ *
+ * Five, and now attributed rather than asserted. It sits just above the
+ * exercise-snacks protocols this app's format actually descends from — ~3
+ * vigorous bouts a day in Jenkins et al. 2019 and Islam et al. 2022, 3-4 short
+ * vigorous bouts a day in Stamatakis et al. 2022's VILPA work — which is the
+ * literature a TRAINING-distribution score belongs to.
+ *
+ * It is deliberately NOT the sedentary-interruption dose, which is 15-25
+ * interruptions a day and which this app cannot observe: most of those are
+ * standing up to make tea. Someone who wants to aim at that can set it, and the
+ * merge window and the spacing nudge follow.
+ */
+export const DEFAULT_TARGET_BOUTS = 5;
+
+export const MIN_TARGET_BOUTS = 2;
+export const MAX_TARGET_BOUTS = 24;
+
+/**
+ * Entries logged within this many minutes of a bout's FIRST entry join it.
  *
  * Three movements logged in one go at the top of the stairs are one
- * interruption of sitting, not three, and counting them as three would let a
- * single session buy a good score by being logged in pieces.
+ * interruption, not three, and counting them as three would let a single
+ * session buy a good score by being logged in pieces.
+ *
+ * DERIVED FROM THE TARGET rather than fixed at fifteen minutes, because the two
+ * have to move together. At five bouts in a fourteen-hour window the ideal gap
+ * is 140 minutes and a fifteen-minute merge is a tenth of it — unobjectionable.
+ * At a target of twenty the ideal gap is forty minutes, and a fifteen-minute
+ * merge would swallow genuinely separate breaks, quietly making the higher
+ * target unreachable.
  */
-export const BOUT_MERGE_MIN = 15;
+export function mergeWindowFor(
+  targetBouts: number,
+  window: ActiveWindow = DEFAULT_ACTIVE_WINDOW,
+): number {
+  const span = Math.max(60, (window.endHour - window.startHour) * 60);
+  const idealGap = span / (Math.max(1, targetBouts) + 1);
+  return Math.min(15, Math.max(3, Math.round(idealGap * 0.1)));
+}
+
+/** Clamp a configured target to something a day can actually be scored against. */
+export function normaliseTargetBouts(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value) || value <= 0) return DEFAULT_TARGET_BOUTS;
+  return Math.min(MAX_TARGET_BOUTS, Math.max(MIN_TARGET_BOUTS, Math.round(value)));
+}
 
 export interface ActiveWindow {
   /** Hour the user is normally up and about, 0..23. */
@@ -59,6 +130,26 @@ export interface ActiveWindow {
 }
 
 export const DEFAULT_ACTIVE_WINDOW: ActiveWindow = { startHour: 8, endHour: 22 };
+
+/**
+ * One logged thing, as the spacing metric sees it: when it happened, and how
+ * much movement it recorded.
+ *
+ * A bare number is still accepted and means "at this minute, length unknown",
+ * which is what a set of ten push-ups is.
+ */
+export interface BoutEvent {
+  /** Minutes since local midnight. */
+  minuteOfDay: number;
+  /**
+   * Seconds of movement the entry actually recorded: `durationSec` times the
+   * set count, since `durationSec` is stored per set. Null or absent for the
+   * many entries that record reps and nothing else.
+   */
+  movementSec?: number | null;
+}
+
+export type SpacingEvent = number | BoutEvent;
 
 export interface SpacingResult {
   /**
@@ -73,25 +164,121 @@ export interface SpacingResult {
   longestGapMin: number | null;
   /** Minutes since local midnight of each bout, ascending. */
   boutMinutes: number[];
+  /**
+   * Movement minutes recorded by each bout, aligned index-for-index with
+   * `boutMinutes`. Null where nothing in the bout recorded a duration.
+   */
+  boutDurationMin: (number | null)[];
+  /**
+   * Median movement time of the bouts that recorded one, or null when none did.
+   *
+   * Reported BESIDE the score rather than folded into it. Buffey et al. 2022
+   * found two minutes of walking effective where one was not, so length plainly
+   * matters — but the app's own premise is that a two-minute set counts, and
+   * filtering short bouts out of the score would contradict it on evidence that
+   * is about walking breaks rather than about training. Showing the number lets
+   * the user see that their typical snack is twenty seconds long without the
+   * app deciding on their behalf that it did not happen.
+   */
+  medianBoutMinutes: number | null;
+  /** How many of `bouts` recorded a movement time, and so fed that median. */
+  timedBouts: number;
   /** The window the day was actually scored against, after any expansion. */
   window: { startMin: number; endMin: number };
 }
 
+interface GroupedBout {
+  /** First entry in the bout. */
+  startMin: number;
+  /** Recorded movement seconds summed across the bout's entries. */
+  movementSec: number;
+}
+
+function normaliseEvent(event: SpacingEvent): { minuteOfDay: number; movementSec: number } | null {
+  if (typeof event === "number") {
+    return Number.isFinite(event) ? { minuteOfDay: event, movementSec: 0 } : null;
+  }
+  if (!event || !Number.isFinite(event.minuteOfDay)) return null;
+  const sec = event.movementSec;
+  return {
+    minuteOfDay: event.minuteOfDay,
+    movementSec: sec != null && Number.isFinite(sec) && sec > 0 ? sec : 0,
+  };
+}
+
 /**
- * Merge timestamps into bouts. Input is minutes since local midnight, in any
- * order; output is ascending bout times, each the first moment of its bout.
+ * Merge events into bouts, keeping each bout's extent and recorded movement.
+ *
+ * The merge anchors on the bout's FIRST entry, not its most recent one. Chaining
+ * off the latest entry would let a long unbroken session of near-misses collapse
+ * into one enormous "bout", which is the opposite of what the merge is for.
  */
-export function toBouts(
-  minutesOfDay: readonly number[],
-  mergeWithinMin: number = BOUT_MERGE_MIN,
-): number[] {
-  const sorted = [...minutesOfDay].filter((m) => Number.isFinite(m)).sort((a, b) => a - b);
-  const bouts: number[] = [];
-  for (const minute of sorted) {
+function groupBouts(
+  events: readonly SpacingEvent[],
+  mergeWithinMin: number,
+): GroupedBout[] {
+  const sorted = events
+    .map(normaliseEvent)
+    .filter((e): e is { minuteOfDay: number; movementSec: number } => e !== null)
+    .sort((a, b) => a.minuteOfDay - b.minuteOfDay);
+
+  const bouts: GroupedBout[] = [];
+  for (const event of sorted) {
     const last = bouts[bouts.length - 1];
-    if (last === undefined || minute - last > mergeWithinMin) bouts.push(minute);
+    if (last === undefined || event.minuteOfDay - last.startMin > mergeWithinMin) {
+      bouts.push({ startMin: event.minuteOfDay, movementSec: event.movementSec });
+    } else {
+      last.movementSec += event.movementSec;
+    }
   }
   return bouts;
+}
+
+/**
+ * How much movement a bout recorded, in minutes, or null when it recorded none.
+ *
+ * ONLY `durationSec` x sets, summed over the bout. An untimed entry — one set
+ * of ten push-ups — makes no contribution, and a bout of nothing but untimed
+ * entries is null rather than zero: the app does not know whether it took
+ * twenty seconds or five minutes, and "0" would be a claim rather than an
+ * absence.
+ *
+ * An earlier version also took the SPAN from a bout's first entry to its last
+ * as a second lower bound, on the reasoning that three movements logged between
+ * 18:00 and 18:05 is five minutes demonstrably spent at it. Two things were
+ * wrong with that. It is not a bound on MOVEMENT — three sets over five minutes
+ * is more like ninety seconds of work and three and a half minutes of standing
+ * about — so reporting it beside the Buffey threshold, which is two minutes of
+ * actual walking, overstated by the width of the rest intervals. And it made
+ * the figure move with `targetBouts`, because the merge window does: the same
+ * circuit read as two ten-minute bouts at a target of five and six untimed ones
+ * at a target of twenty, so a setting the copy says only changes what a full
+ * mark is measured against silently emptied an unrelated number.
+ */
+function boutDuration(bout: GroupedBout): number | null {
+  // Two decimals, not one: these are often well under a minute, and rounding a
+  // 45-second snack to 0.8 min would render it as "50s".
+  return bout.movementSec > 0 ? round2(bout.movementSec / 60) : null;
+}
+
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const value = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return round2(value);
+}
+
+/**
+ * Merge timestamps into bouts. Input is minutes since local midnight (or
+ * `BoutEvent`s), in any order; output is ascending bout times, each the first
+ * moment of its bout.
+ */
+export function toBouts(
+  events: readonly SpacingEvent[],
+  mergeWithinMin: number = mergeWindowFor(DEFAULT_TARGET_BOUTS),
+): number[] {
+  return groupBouts(events, mergeWithinMin).map((bout) => bout.startMin);
 }
 
 /**
@@ -104,11 +291,19 @@ export function toBouts(
  * trained in and score a perfect one.
  */
 export function daySpacing(
-  minutesOfDay: readonly number[],
+  events: readonly SpacingEvent[],
   window: ActiveWindow = DEFAULT_ACTIVE_WINDOW,
-  targetBouts: number = TARGET_BOUTS,
+  targetBouts: number = DEFAULT_TARGET_BOUTS,
 ): SpacingResult {
-  const bouts = toBouts(minutesOfDay);
+  // Clamped here as well as in summariseSpacing, so a day's score and the
+  // summary drawn beside it cannot be measured against different targets.
+  const target = normaliseTargetBouts(targetBouts);
+  // Merged on the CONFIGURED window, not the expanded one: an early run
+  // widening the day must not also widen what counts as one bout.
+  const grouped = groupBouts(events, mergeWindowFor(target, window));
+  const bouts = grouped.map((bout) => bout.startMin);
+  const durations = grouped.map(boutDuration);
+  const known = durations.filter((d): d is number => d != null);
 
   let startMin = clampMinute(window.startHour * 60);
   let endMin = clampMinute(window.endHour * 60);
@@ -126,6 +321,9 @@ export function daySpacing(
   const base = {
     bouts: bouts.length,
     boutMinutes: bouts,
+    boutDurationMin: durations,
+    medianBoutMinutes: median(known),
+    timedBouts: known.length,
     window: { startMin, endMin },
   };
 
@@ -147,7 +345,7 @@ export function daySpacing(
     concentration += share * share;
   }
 
-  const segments = Math.max(gaps.length, targetBouts + 1);
+  const segments = Math.max(gaps.length, target + 1);
   const score = concentration > 0 ? 1 / segments / concentration : 1;
 
   return {
@@ -166,25 +364,39 @@ export interface SpacingSummary {
   boutsPerDay: number;
   /** Mean longest-gap across logged days, in minutes. */
   longestGapMin: number | null;
+  /**
+   * Median length of every bout in the window whose length is known — pooled
+   * across days rather than a mean of per-day medians, so one busy Saturday
+   * does not weigh the same as one Tuesday lunchtime set.
+   */
+  medianBoutMinutes: number | null;
+  /** Bouts that contributed a known length, and bouts in total. */
+  timedBouts: number;
+  totalBouts: number;
   /** Bouts per hour of the day, 24 buckets — where the training actually lands. */
   byHour: number[];
   /** The best and worst logged days in the window, for a concrete comparison. */
   best: { date: string; score: number } | null;
   worst: { date: string; score: number } | null;
   window: ActiveWindow;
+  /** The target the scores were measured against, so the page can name it. */
+  targetBouts: number;
 }
 
 /** Roll per-day results up across a window. Days with nothing logged are skipped. */
 export function summariseSpacing(
   days: ReadonlyMap<string, SpacingResult> | ReadonlyArray<[string, SpacingResult]>,
   window: ActiveWindow = DEFAULT_ACTIVE_WINDOW,
+  targetBouts: number = DEFAULT_TARGET_BOUTS,
 ): SpacingSummary {
   const entries = Array.isArray(days) ? days : [...(days as ReadonlyMap<string, SpacingResult>)];
 
   const byHour = new Array(24).fill(0) as number[];
+  const durations: number[] = [];
   let scoreSum = 0;
   let gapSum = 0;
   let bouts = 0;
+  let totalBouts = 0;
   let rated = 0;
   let best: { date: string; score: number } | null = null;
   let worst: { date: string; score: number } | null = null;
@@ -193,6 +405,12 @@ export function summariseSpacing(
     for (const minute of day.boutMinutes) {
       const hour = Math.min(23, Math.max(0, Math.floor(minute / 60)));
       byHour[hour] += 1;
+    }
+    // Pooled before the score check, and across every day: how long a snack
+    // lasts is a fact about the snack, not about how well the day was spread.
+    totalBouts += day.bouts;
+    for (const duration of day.boutDurationMin) {
+      if (duration != null) durations.push(duration);
     }
     if (day.score == null) continue;
 
@@ -210,10 +428,14 @@ export function summariseSpacing(
     ratedDays: rated,
     boutsPerDay: rated > 0 ? round2(bouts / rated) : 0,
     longestGapMin: rated > 0 ? Math.round(gapSum / rated) : null,
+    medianBoutMinutes: median(durations),
+    timedBouts: durations.length,
+    totalBouts,
     byHour,
     best,
     worst,
     window,
+    targetBouts: normaliseTargetBouts(targetBouts),
   };
 }
 
@@ -226,12 +448,29 @@ export function spacingLabel(score: number | null): string {
   return "One block";
 }
 
-/** "6h 20m" — a gap is read as a duration, never as 380. */
+/**
+ * "6h 20m" — a gap is read as a duration, never as 380.
+ *
+ * Rounded to whole minutes BEFORE the split, not after: flooring the hours and
+ * rounding the minutes independently renders 119.63 as "1h 60m".
+ */
 export function formatGap(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
   if (hours === 0) return `${mins}m`;
   return mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
+}
+
+/**
+ * A bout length, which is usually minutes but is sometimes seconds — and a
+ * twenty-second stair sprint rounded to "0m" would read as a bug.
+ */
+export function formatBoutLength(minutes: number): string {
+  // Rounded to five seconds first, then handed on if that lands on a minute:
+  // 0.99 min rounds to 60 seconds, which must read "1m" and not "60s".
+  const seconds = Math.max(5, Math.round((minutes * 60) / 5) * 5);
+  return seconds < 60 ? `${seconds}s` : formatGap(seconds / 60);
 }
 
 function clampMinute(value: number): number {

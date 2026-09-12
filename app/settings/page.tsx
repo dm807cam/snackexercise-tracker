@@ -7,6 +7,7 @@ import {
   getPhysiology,
   getSettings,
   getStepSettings,
+  getTargetBouts,
   getTargets,
 } from "@/lib/queries";
 import { DEFAULT_MODEL } from "@/lib/openrouter";
@@ -21,13 +22,15 @@ export default async function SettingsPage() {
     getSettings(),
     getExercises(),
   ]);
-  const [stepSettings, activeWindow, perMuscleTarget, targets, physiology] = await Promise.all([
-    getStepSettings(config.today),
-    getActiveWindow(),
-    getPerMuscleTarget(),
-    getTargets(),
-    getPhysiology(),
-  ]);
+  const [stepSettings, activeWindow, targetBouts, perMuscleTarget, targets, physiology] =
+    await Promise.all([
+      getStepSettings(config.today),
+      getActiveWindow(),
+      getTargetBouts(),
+      getPerMuscleTarget(),
+      getTargets(),
+      getPhysiology(),
+    ]);
 
   return (
     <SettingsView
@@ -45,6 +48,7 @@ export default async function SettingsPage() {
         ),
         dayStartHour: activeWindow.startHour,
         dayEndHour: activeWindow.endHour,
+        targetBouts,
         perMuscleTarget,
         targets,
         physiology,

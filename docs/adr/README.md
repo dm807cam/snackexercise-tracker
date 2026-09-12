@@ -19,7 +19,7 @@ accident.
 | [0008](./0008-cardio-stays-off-the-radar.md) | Cardio contributes no effective sets | Accepted |
 | [0009](./0009-active-days-ignores-steps.md) | `activeDays` stays "days with entries" | Accepted, contested |
 | [0010](./0010-cardio-is-a-second-radar-series.md) | Cardio gets a second radar series, not a share of the first | Accepted |
-| [0011](./0011-spacing-score.md) | Spacing is scored by gap concentration against a target frequency | Accepted |
+| [0011](./0011-spacing-score.md) | Spacing is scored by gap concentration against a target frequency | Accepted, amended by 0022 |
 | [0012](./0012-times-are-typed-not-stamped.md) | A typed time beats an instant built in the browser | Accepted |
 | [0013](./0013-one-colour-one-quality.md) | One colour, one quality — and `--accent` is not one of them | Accepted |
 | [0014](./0014-a-daily-share-with-no-carry-over.md) | Today's target is a flat seventh, and nothing carries over | Accepted, amended by 0016, 0021 |
@@ -30,6 +30,7 @@ accident.
 | [0019](./0019-targets-are-configurable-and-the-two-claims-are-separate.md) | The weekly targets are configurable, and the two claims are kept apart | Accepted, amends 0005 |
 | [0020](./0020-intensity-is-classified-on-the-users-own-scale.md) | Intensity is classified on the user's own scale, and reported beside volume | Accepted |
 | [0021](./0021-walking-cannot-close-the-cardio-ring.md) | Walking fills at most half the cardio ring, and a daily step total is not brisk | Accepted, amends 0007, 0014 |
+| [0022](./0022-the-spacing-target-is-attributed-and-configurable.md) | The spacing score measures training distribution, and its target is attributed and configurable | Accepted, amends 0011 |
 
 ## Format
 
