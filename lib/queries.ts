@@ -406,12 +406,26 @@ export async function setSteps(
   date: LocalDate,
   steps: number | null,
   source = "manual",
-  activeMinutes: number | null = null,
+  /**
+   * Brisk minutes, where the caller knows about them.
+   *
+   * UNDEFINED AND NULL MEAN DIFFERENT THINGS, and the difference matters:
+   * `null` is "clear it", which the day's own field sends when emptied;
+   * `undefined` is "I am not the authority on this", which is what the voice
+   * tab, the nightly Shortcut and the CSV import all are. Writing a default of
+   * null for them would silently erase a value the phone had recorded every
+   * time somebody dictated a step count.
+   */
+  activeMinutes?: number | null,
 ): Promise<void> {
   await prisma.dailyMetric.upsert({
     where: { localDate: date },
-    create: { localDate: date, steps, source, activeMinutes },
-    update: { steps, source, activeMinutes },
+    create: { localDate: date, steps, source, activeMinutes: activeMinutes ?? null },
+    update: {
+      steps,
+      source,
+      ...(activeMinutes === undefined ? {} : { activeMinutes }),
+    },
   });
 }
 

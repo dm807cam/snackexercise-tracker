@@ -262,13 +262,20 @@ exports.
 The realistic way to get steps in is an automation. On iOS, a Shortcut:
 
 1. **Get Health Sample** — Steps, *Today*, Sum
-2. **Get Contents of URL** — `http://<your-host>:3000/api/metrics/` + today's
+2. **Get Health Sample** — Exercise Minutes, *Today*, Sum
+3. **Get Contents of URL** — `http://<your-host>:3000/api/metrics/` + today's
    date as `yyyy-MM-dd`, method `PUT`, request body JSON
-   `{"steps": <the number>, "source": "shortcut"}`
+   `{"steps": <the number>, "activeMinutes": <the minutes>, "source": "shortcut"}`
 
 Add it to a personal automation at 23:50 daily. The endpoint upserts, so
 re-running it corrects the day rather than adding to it. On Android the same
 call works from Tasker or HTTP Shortcuts.
+
+`activeMinutes` is optional, and worth sending. A bare step count is credited as
+*incidental* walking, because a daily total is mostly kitchen, corridor and
+shop; minutes the phone counted as brisk are credited at the brisk rate
+instead. Leave it out of the body entirely and whatever is already recorded for
+that day stays — the app only clears it when you explicitly send `null`.
 
 There is no authentication on the app, so this needs nothing but the URL — which
 is also why it should stay on your own network.

@@ -532,6 +532,42 @@ test.describe("how hard, not just how much", () => {
  * because the number involved is large and easy to get wrong.
  */
 test.describe("walking does not finish the day for you", () => {
+  test("a step count that says nothing about brisk minutes leaves them alone", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const today = new URL(page.url()).pathname.split("/").pop()!;
+
+    try {
+      // The phone's nightly shortcut records both.
+      await page.request.put(`/api/metrics/${today}`, {
+        data: { steps: 12000, activeMinutes: 25, source: "shortcut" },
+      });
+
+      // Then something that only knows about steps writes the day — the voice
+      // tab, or an older shortcut. It must not erase what the phone recorded.
+      await page.request.put(`/api/metrics/${today}`, {
+        data: { steps: 13000, source: "manual" },
+      });
+
+      const after = await (await page.request.get(`/api/metrics/${today}`)).json();
+      expect(after.steps).toBe(13000);
+      expect(after.activeMinutes).toBe(25);
+
+      // Explicit null still clears it: "leave it alone" and "clear it" are
+      // different requests and the endpoint honours both.
+      await page.request.put(`/api/metrics/${today}`, {
+        data: { steps: 13000, activeMinutes: null, source: "manual" },
+      });
+      const cleared = await (await page.request.get(`/api/metrics/${today}`)).json();
+      expect(cleared.activeMinutes).toBeNull();
+    } finally {
+      await page.request.put(`/api/metrics/${today}`, {
+        data: { steps: null, activeMinutes: null, source: "manual" },
+      });
+    }
+  });
+
   test("a huge step count fills half the cardio ring and no more", async ({ page }) => {
     await page.goto("/");
     const today = new URL(page.url()).pathname.split("/").pop()!;

@@ -29,7 +29,9 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     const localDate = localDateSchema.parse(date);
     const input = dailyMetricSchema.parse(await request.json());
 
-    await setSteps(localDate, input.steps ?? null, input.source, input.activeMinutes ?? null);
+    // `activeMinutes` is forwarded as-is: absent from the body means "leave it
+    // alone", which is what the nightly Shortcut and the voice tab are saying.
+    await setSteps(localDate, input.steps ?? null, input.source, input.activeMinutes);
     return {
       localDate,
       steps: input.steps ?? null,

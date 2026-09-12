@@ -164,10 +164,14 @@ export async function POST(request: NextRequest) {
           activeMinutes: day.activeMinutes ?? null,
           source: day.source,
         },
+        // A v1-v3 file carries no brisk minutes at all, so restoring one must
+        // leave any already recorded alone rather than writing null over them.
+        // The route's promise is that an old backup restores each day as
+        // exactly what it had, not that it erases what it never knew about.
         update: {
           steps: day.steps ?? null,
-          activeMinutes: day.activeMinutes ?? null,
           source: day.source,
+          ...(day.activeMinutes === undefined ? {} : { activeMinutes: day.activeMinutes }),
         },
       });
       metrics += 1;

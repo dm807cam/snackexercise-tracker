@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { days } = bulkSchema.parse(await request.json());
 
     for (const day of days) {
-      await setSteps(day.localDate, day.steps ?? null, day.source, day.activeMinutes ?? null);
+      await setSteps(day.localDate, day.steps ?? null, day.source, day.activeMinutes);
     }
     return { written: days.length };
   });
