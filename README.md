@@ -256,34 +256,20 @@ If port 3000 is already taken on the host, set `APP_PORT` (in `.env`, or as a
 stack variable when deploying through Portainer) — the container always listens
 on 3000 internally, only the published port changes.
 
-The database lives in a Docker-managed volume called `snackexercise-data`. To
-put it somewhere else, set `APP_VOLUMES` to a whole mount spec — source and
-target, not just the source. The target must stay `/data`, which is where the
-container writes regardless:
+The database lives in a Docker-managed volume called `snackexercise-data`, so it
+survives rebuilds and restarts. To keep it somewhere you can see and back up — a
+NAS share, say — change the mount in `docker-compose.yml` to a host path, with
+`/data` still as the target, which is where the container writes regardless:
 
-```bash
-APP_VOLUMES="/srv/snackexercise:/data"
+```yaml
+    volumes:
+      - /srv/snackexercise:/data
 ```
 
-A host path works with nothing else changed, but Docker leaves a bind-mounted
-directory's ownership exactly as it finds it — unlike a fresh managed volume,
-which it seeds from the image. A root-owned directory therefore fails at
-start-up with a read-only database, so hand it to the user the server runs as
-first: `sudo chown 1000:1000 /srv/snackexercise`.
-
-Use a host path here, not a volume name. Compose resolves a named source
-against the top-level `volumes:` block and refuses anything it does not find
-there, so `APP_VOLUMES="snackexercise-data-work:/data"` fails the whole stack:
-
-```
-service "app" refers to undefined volume snackexercise-data-work: invalid compose project
-```
-
-That is a limitation of Compose, not a setting to hunt for: a volume name has
-to be written in the file, and no variable can add one. It is also not worth
-working around, because naming the volume is not how instances are kept apart
-— the project name already is. Leave `APP_VOLUMES` unset unless you want the
-database at a specific path on disk.
+Docker leaves a bind-mounted directory's ownership exactly as it finds it,
+unlike a fresh managed volume, which it seeds from the image. A root-owned
+directory therefore fails at start-up with a read-only database, so hand it to
+the user the server runs as first: `sudo chown 1000:1000 /srv/snackexercise`.
 
 Set `TZ` to your own zone in `docker-compose.yml`: it decides where one day ends
 and the next begins, so a 23:30 snack lands on the right evening. You can also
@@ -291,45 +277,6 @@ override it later in Settings without redeploying.
 
 The container applies migrations and seeds the exercise catalogue on every
 start. Both steps are idempotent, so restarting is always safe.
-
-### Running more than one instance
-
-Everything Compose creates — the container, the network, the managed volume —
-is prefixed with the project name, which defaults to the directory name. Give
-each instance its own `COMPOSE_PROJECT_NAME` and its own `APP_PORT` and they
-run side by side out of a single checkout:
-
-```bash
-cat > .env.home <<'EOF'
-COMPOSE_PROJECT_NAME="snack-home"
-APP_PORT="3000"
-EOF
-
-cat > .env.work <<'EOF'
-COMPOSE_PROJECT_NAME="snack-work"
-APP_PORT="3001"
-EOF
-
-docker compose --env-file .env.home up -d --build
-docker compose --env-file .env.work up -d --build
-```
-
-The volume is namespaced by project too — `snack-home_snackexercise-data` and
-`snack-work_snackexercise-data` — so the two databases stay separate with
-`APP_VOLUMES` left unset. Do not reach for it to name a volume per instance:
-that is what the project name already did, and a volume name Compose cannot
-find in the file fails the stack outright. Set it only to put a database at a
-particular host path, and then give each instance its own — two containers
-writing one SQLite file will corrupt it.
-
-Through Portainer the stack name *is* the project name, so a second stack needs
-nothing but a different `APP_PORT`.
-
-The container is named after the project (`snack-home-app-1`) rather than a
-fixed `snackexercise-tracker`. A fixed name can exist only once per machine, so
-it was the one thing no amount of configuration could work around. Existing
-installs keep their data: the volume name derives from the project name, which
-has not changed — only the container is renamed, on its next recreation.
 
 ### Voice entry
 
