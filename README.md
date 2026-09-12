@@ -271,9 +271,19 @@ which it seeds from the image. A root-owned directory therefore fails at
 start-up with a read-only database, so hand it to the user the server runs as
 first: `sudo chown 1000:1000 /srv/snackexercise`.
 
-A *named* volume other than the default also has to be declared in the
-top-level `volumes:` block, or Compose rejects the project as referring to an
-undefined volume.
+Use a host path here, not a volume name. Compose resolves a named source
+against the top-level `volumes:` block and refuses anything it does not find
+there, so `APP_VOLUMES="snackexercise-data-work:/data"` fails the whole stack:
+
+```
+service "app" refers to undefined volume snackexercise-data-work: invalid compose project
+```
+
+That is a limitation of Compose, not a setting to hunt for: a volume name has
+to be written in the file, and no variable can add one. It is also not worth
+working around, because naming the volume is not how instances are kept apart
+— the project name already is. Leave `APP_VOLUMES` unset unless you want the
+database at a specific path on disk.
 
 Set `TZ` to your own zone in `docker-compose.yml`: it decides where one day ends
 and the next begins, so a 23:30 snack lands on the right evening. You can also
@@ -304,9 +314,12 @@ docker compose --env-file .env.home up -d --build
 docker compose --env-file .env.work up -d --build
 ```
 
-The volume is namespaced by project too, so the two databases stay separate
-without setting `APP_VOLUMES` at all. Set it only to move a database somewhere
-specific — and then give each instance its own source, because two containers
+The volume is namespaced by project too — `snack-home_snackexercise-data` and
+`snack-work_snackexercise-data` — so the two databases stay separate with
+`APP_VOLUMES` left unset. Do not reach for it to name a volume per instance:
+that is what the project name already did, and a volume name Compose cannot
+find in the file fails the stack outright. Set it only to put a database at a
+particular host path, and then give each instance its own — two containers
 writing one SQLite file will corrupt it.
 
 Through Portainer the stack name *is* the project name, so a second stack needs
