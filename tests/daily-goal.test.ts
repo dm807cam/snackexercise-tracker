@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CARDIO_GUIDELINE_FLOOR_PER_DAY,
+  MAX_STEP_SHARE_OF_CARDIO_RING,
   buildDailyGoal,
   dailyTargets,
   goalHeadline,
@@ -200,5 +201,44 @@ describe("configurable targets", () => {
     const goal = buildDailyGoal({ hardSets: 0, metMinutes: 0 });
     expect(goal.cardio.target).toBeCloseTo(GUIDELINE_TARGETS.cardioMetMinutesPerWeek / 7, 1);
     expect(goal.cardioGuidelineFraction).toBe(1);
+  });
+});
+
+describe("walking cannot close the cardio ring on its own", () => {
+  const perDay = dailyTargets();
+
+  it("caps the step credit at half the day's target", () => {
+    // The defect: at the old flat 3.5 METs and half weight, about 9,400 steps
+    // closed the ring with no cardio logged at all, and the headline read
+    // "Cardio done — strength still open" for a walk to the shops.
+    const walked = buildDailyGoal({ hardSets: 0, metMinutes: 0, stepMetMinutes: 1000 });
+
+    expect(walked.cardio.met).toBe(false);
+    expect(walked.cardio.done).toBeCloseTo(perDay.cardio * MAX_STEP_SHARE_OF_CARDIO_RING, 1);
+    expect(walked.stepsCapped).toBe(true);
+  });
+
+  it("still lets walking contribute meaningfully", () => {
+    // Capped, not discarded: the credit is real and the stats page counts all
+    // of it. What the ring will not do is finish on walking alone.
+    const walked = buildDailyGoal({ hardSets: 0, metMinutes: 0, stepMetMinutes: 20 });
+    expect(walked.cardio.done).toBe(20);
+    expect(walked.stepsCapped).toBe(false);
+    expect(walked.empty).toBe(false);
+  });
+
+  it("lets logged cardio finish what walking started", () => {
+    // The cap is on the steps, not on the ring: a real session on top of a
+    // walking day closes it.
+    const both = buildDailyGoal({
+      hardSets: 0,
+      metMinutes: perDay.cardio * 0.5,
+      stepMetMinutes: 1000,
+    });
+    expect(both.cardio.met).toBe(true);
+  });
+
+  it("does not cap a day with no walking at all", () => {
+    expect(buildDailyGoal({ hardSets: 0, metMinutes: 500 }).stepsCapped).toBe(false);
   });
 });

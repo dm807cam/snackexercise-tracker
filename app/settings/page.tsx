@@ -10,6 +10,8 @@ import {
   getTargets,
 } from "@/lib/queries";
 import { DEFAULT_MODEL } from "@/lib/openrouter";
+import { stepsForMetMinutes } from "@/lib/cardio";
+import { MAX_STEP_SHARE_OF_CARDIO_RING } from "@/lib/daily-goal";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,10 @@ export default async function SettingsPage() {
         stepsMode: stepSettings.mode,
         stepBaseline: settings.stepBaseline ?? "",
         resolvedBaseline: stepSettings.baseline,
+        stepsForHalfRing: stepsForMetMinutes(
+          (targets.cardioMetMinutesPerWeek / 7) * MAX_STEP_SHARE_OF_CARDIO_RING,
+          stepSettings,
+        ),
         dayStartHour: activeWindow.startHour,
         dayEndHour: activeWindow.endHour,
         perMuscleTarget,

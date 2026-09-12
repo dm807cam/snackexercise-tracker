@@ -11,6 +11,7 @@ import {
   personalStepBaseline,
   runningMets,
   stepMetMinutes,
+  stepsForMetMinutes,
   stepWeightFor,
   walkingMets,
   type CardioInput,
@@ -215,11 +216,40 @@ describe("step credit", () => {
     expect(stepMetMinutes(4000, settings)).toBe(0);
   });
 
-  it("credits the excess at walking intensity, discounted by the mode", () => {
-    // 10,000 steps: 6,000 excess = 54.5 min at 3.5 METs = 191 MET-min, halved.
-    expect(stepMetMinutes(10000, settings)).toBeCloseTo(95.5, 0);
-    expect(stepMetMinutes(10000, { ...settings, mode: "full" })).toBeCloseTo(191, 0);
+  it("credits the excess at incidental walking intensity, discounted by the mode", () => {
+    // 10,000 steps: 6,000 excess = 54.5 min at 2.8 METs = 153 MET-min, halved.
+    // 2.8 rather than 3.5 because a bare daily step total is kitchen, corridor
+    // and shop — the 100+ spm cadence threshold is about a walking BOUT, and
+    // says nothing about a day's accumulated total.
+    expect(stepMetMinutes(10000, settings)).toBeCloseTo(76.4, 0);
+    expect(stepMetMinutes(10000, { ...settings, mode: "full" })).toBeCloseTo(152.7, 0);
     expect(stepMetMinutes(10000, { ...settings, mode: "off" })).toBe(0);
+  });
+
+  it("credits minutes the phone called brisk at the brisk rate", () => {
+    // The only thing that separates 6,000 extra slow steps from 6,000 extra
+    // fast ones, which under one flat rate scored identically.
+    const incidental = stepMetMinutes(10000, settings);
+    const brisk = stepMetMinutes(10000, settings, 0, 30);
+
+    expect(brisk).toBeGreaterThan(incidental);
+    // 30 brisk minutes at 3.5 plus the remaining 24.5 at 2.8, halved.
+    expect(brisk).toBeCloseTo((30 * 3.5 + 24.5 * 2.8) / 2, 0);
+  });
+
+  it("cannot credit more brisk minutes than the day actually walked", () => {
+    // A phone reporting an hour of activity on 6,000 surplus steps is reporting
+    // something other than walking; the credit is bounded by the steps.
+    const all = stepMetMinutes(10000, settings, 0, 600);
+    expect(all).toBeCloseTo((6000 / 110) * 3.5 * 0.5, 0);
+  });
+
+  it("says how many steps would fill a share of the ring", () => {
+    // "Half weight" tells nobody that about 12,000 steps fills half a day's
+    // cardio ring, and that is the fact the setting decides.
+    const steps = stepsForMetMinutes(43, settings)!;
+    expect(stepMetMinutes(steps, settings)).toBeCloseTo(43, 0);
+    expect(stepsForMetMinutes(43, { ...settings, mode: "off" })).toBeNull();
   });
 
   it("handles a missing count without inventing one", () => {

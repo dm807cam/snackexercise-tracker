@@ -30,6 +30,7 @@ import {
 } from "./scoring";
 import {
   DEFAULT_STEP_BASELINE,
+  type DayWalking,
   entryMetMinutes,
   entryMinutes,
   metsForEntry,
@@ -132,6 +133,8 @@ export async function getDaySummary(
 ): Promise<DaySummary & {
   entries: EntryWithExercise[];
   steps: number | null;
+  /** Minutes the phone called brisk, when it reports them. */
+  activeMinutes: number | null;
   cardioMuscles: MuscleTotals;
   metMinutes: number;
   /**
@@ -154,9 +157,9 @@ export async function getDaySummary(
   /** The weekly doses the day's rings are a seventh of. */
   targets: Targets;
 }> {
-  const [entries, steps, activeWindow, stepSettings, targets, physiology] = await Promise.all([
+  const [entries, walking, activeWindow, stepSettings, targets, physiology] = await Promise.all([
     getEntriesForDate(date),
-    getSteps(date),
+    getWalking(date),
     getActiveWindow(),
     getStepSettings(today),
     getTargets(),
@@ -173,13 +176,19 @@ export async function getDaySummary(
   return {
     ...summary,
     entries,
-    steps,
+    steps: walking.steps ?? null,
+    activeMinutes: walking.activeMinutes ?? null,
     cardioMuscles: muscleCardioLoad(entries, (e) => entryMetMinutes(e, intensityContext)),
     metMinutes: Math.round(
       entries.reduce((sum, e) => sum + entryMetMinutes(e, intensityContext), 0),
     ),
     stepMetMinutes: Math.round(
-      stepMetMinutes(steps, stepSettings, impliedStepsFromEntries(entries)),
+      stepMetMinutes(
+        walking.steps,
+        stepSettings,
+        impliedStepsFromEntries(entries),
+        walking.activeMinutes,
+      ),
     ),
     effectiveSets: round(totalEffectiveSets(summary.muscles)),
     hardSets: round(totalHardSets(entries)),
@@ -297,9 +306,9 @@ export async function getDailyLoad(
   start: LocalDate,
   end: LocalDate,
 ): Promise<Record<LocalDate, DayLoad>> {
-  const [entries, stepsByDate, stepSettings, targets, physiology] = await Promise.all([
+  const [entries, walkingByDate, stepSettings, targets, physiology] = await Promise.all([
     getEntriesInRange(start, end),
-    getStepsInRange(start, end),
+    getWalkingInRange(start, end),
     getStepSettings(),
     getTargets(),
     getPhysiology(),
@@ -318,7 +327,7 @@ export async function getDailyLoad(
     else entriesByDate.set(entry.localDate, [entry]);
   }
 
-  const dates = new Set([...entriesByDate.keys(), ...Object.keys(stepsByDate)]);
+  const dates = new Set([...entriesByDate.keys(), ...Object.keys(walkingByDate)]);
   for (const date of dates) {
     const dayEntries = entriesByDate.get(date) ?? [];
 
@@ -329,9 +338,14 @@ export async function getDailyLoad(
       metMinutes += entryMetMinutes(entry, intensityContext);
     }
 
-    const steps = stepsByDate[date];
-    if (steps != null) {
-      metMinutes += stepMetMinutes(steps, stepSettings, impliedStepsFromEntries(dayEntries));
+    const walking = walkingByDate[date];
+    if (walking?.steps != null) {
+      metMinutes += stepMetMinutes(
+        walking.steps,
+        stepSettings,
+        impliedStepsFromEntries(dayEntries),
+        walking.activeMinutes,
+      );
     }
 
     // A day at the weekly guideline pace for both qualities scores the same as
@@ -358,6 +372,25 @@ export async function getSteps(date: LocalDate): Promise<number | null> {
   return row?.steps ?? null;
 }
 
+/** A day's walking as the phone reported it — the count and the brisk minutes. */
+export async function getWalking(date: LocalDate): Promise<DayWalking> {
+  const row = await prisma.dailyMetric.findUnique({ where: { localDate: date } });
+  return { steps: row?.steps ?? null, activeMinutes: row?.activeMinutes ?? null };
+}
+
+export async function getWalkingInRange(
+  start: LocalDate,
+  end: LocalDate,
+): Promise<Record<LocalDate, DayWalking>> {
+  const rows = await prisma.dailyMetric.findMany({
+    where: { localDate: { gte: start, lte: end }, steps: { not: null } },
+    select: { localDate: true, steps: true, activeMinutes: true },
+  });
+  return Object.fromEntries(
+    rows.map((r) => [r.localDate, { steps: r.steps, activeMinutes: r.activeMinutes }]),
+  );
+}
+
 export async function getStepsInRange(
   start: LocalDate,
   end: LocalDate,
@@ -373,11 +406,26 @@ export async function setSteps(
   date: LocalDate,
   steps: number | null,
   source = "manual",
+  /**
+   * Brisk minutes, where the caller knows about them.
+   *
+   * UNDEFINED AND NULL MEAN DIFFERENT THINGS, and the difference matters:
+   * `null` is "clear it", which the day's own field sends when emptied;
+   * `undefined` is "I am not the authority on this", which is what the voice
+   * tab, the nightly Shortcut and the CSV import all are. Writing a default of
+   * null for them would silently erase a value the phone had recorded every
+   * time somebody dictated a step count.
+   */
+  activeMinutes?: number | null,
 ): Promise<void> {
   await prisma.dailyMetric.upsert({
     where: { localDate: date },
-    create: { localDate: date, steps, source },
-    update: { steps, source },
+    create: { localDate: date, steps, source, activeMinutes: activeMinutes ?? null },
+    update: {
+      steps,
+      source,
+      ...(activeMinutes === undefined ? {} : { activeMinutes }),
+    },
   });
 }
 
@@ -613,7 +661,7 @@ export async function loadStats(
     previousEntries,
     lastTrained,
     lastCardio,
-    steps,
+    walking,
     stepSettings,
     activeWindow,
     perMuscleTarget,
@@ -625,7 +673,7 @@ export async function loadStats(
     comparePrevious ? getEntriesInRange(previous.start, previous.end) : [],
     getLastTrainedByAxis(),
     getLastCardioDate(),
-    getStepsInRange(current.start, current.end),
+    getWalkingInRange(current.start, current.end),
     getStepSettings(today),
     getActiveWindow(),
     getPerMuscleTarget(),
@@ -644,7 +692,7 @@ export async function loadStats(
   const balance = buildBalance({
     windowDays,
     entries: currentEntries,
-    stepsByDate: steps,
+    walkingByDate: walking,
     stepSettings,
     targets,
     intensityContext,
@@ -673,7 +721,7 @@ export async function loadStats(
     today,
     balance,
     lastCardio,
-    daysWithSteps: Object.keys(steps).length,
+    daysWithSteps: Object.keys(walking).length,
     spacing,
     perMuscleTarget,
     progress,

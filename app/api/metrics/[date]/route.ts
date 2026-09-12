@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { handle } from "@/lib/api";
-import { getSteps, setSteps } from "@/lib/queries";
+import { getWalking, setSteps } from "@/lib/queries";
 import { dailyMetricSchema, localDateSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   return handle(async () => {
     const { date } = await params;
     const localDate = localDateSchema.parse(date);
-    return { localDate, steps: await getSteps(localDate) };
+    return { localDate, ...(await getWalking(localDate)) };
   });
 }
 
@@ -29,7 +29,13 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     const localDate = localDateSchema.parse(date);
     const input = dailyMetricSchema.parse(await request.json());
 
-    await setSteps(localDate, input.steps ?? null, input.source);
-    return { localDate, steps: input.steps ?? null };
+    // `activeMinutes` is forwarded as-is: absent from the body means "leave it
+    // alone", which is what the nightly Shortcut and the voice tab are saying.
+    await setSteps(localDate, input.steps ?? null, input.source, input.activeMinutes);
+    return {
+      localDate,
+      steps: input.steps ?? null,
+      activeMinutes: input.activeMinutes ?? null,
+    };
   });
 }

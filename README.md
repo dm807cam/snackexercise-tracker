@@ -85,7 +85,16 @@ logged to say anything honest.
 
 Under Settings you can turn step-counting off, or up to full weight, and set the
 baseline by hand instead of letting the app take the quiet quarter of your own
-days.
+days — which also names the thing that setting actually decides: how many steps
+fill half a day's cardio ring.
+
+**Walking never closes the cardio ring on its own.** It fills at most half of it,
+because the ring asks "is there anything left in me that I owe today?" and
+answering "no" because you walked to the shops is exactly what the step discount
+exists to avoid. The balance marker still counts every credited step — its
+question is different. Above-baseline steps are credited as *incidental* walking;
+if your phone also reports brisk or active minutes, those are credited at the
+brisk rate instead. See [ADR 0021](./docs/adr/0021-walking-cannot-close-the-cardio-ring.md).
 
 Cardio stays out of the effective-set total, but not out of sight. It travels as
 a second channel in the same per-muscle shape — an outline on the body map, its
@@ -253,13 +262,20 @@ exports.
 The realistic way to get steps in is an automation. On iOS, a Shortcut:
 
 1. **Get Health Sample** — Steps, *Today*, Sum
-2. **Get Contents of URL** — `http://<your-host>:3000/api/metrics/` + today's
+2. **Get Health Sample** — Exercise Minutes, *Today*, Sum
+3. **Get Contents of URL** — `http://<your-host>:3000/api/metrics/` + today's
    date as `yyyy-MM-dd`, method `PUT`, request body JSON
-   `{"steps": <the number>, "source": "shortcut"}`
+   `{"steps": <the number>, "activeMinutes": <the minutes>, "source": "shortcut"}`
 
 Add it to a personal automation at 23:50 daily. The endpoint upserts, so
 re-running it corrects the day rather than adding to it. On Android the same
 call works from Tasker or HTTP Shortcuts.
+
+`activeMinutes` is optional, and worth sending. A bare step count is credited as
+*incidental* walking, because a daily total is mostly kitchen, corridor and
+shop; minutes the phone counted as brisk are credited at the brisk rate
+instead. Leave it out of the body entirely and whatever is already recorded for
+that day stays — the app only clears it when you explicitly send `null`.
 
 There is no authentication on the app, so this needs nothing but the URL — which
 is also why it should stay on your own network.

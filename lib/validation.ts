@@ -126,6 +126,11 @@ export const exercisePatchSchema = exerciseFieldsSchema.partial();
  */
 export const dailyMetricSchema = z.object({
   steps: z.number().int().min(0).max(200000).nullish(),
+  /**
+   * Minutes the phone counted as brisk. Capped at a day, since anything above
+   * that is a unit mix-up rather than a very good day out.
+   */
+  activeMinutes: z.number().int().min(0).max(1440).nullish(),
   source: z.enum(["manual", "shortcut", "import", "llm"]).default("manual"),
 });
 

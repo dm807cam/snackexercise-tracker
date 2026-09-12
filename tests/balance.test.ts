@@ -7,7 +7,7 @@ import {
 import { GUIDELINE_TARGETS, LONGEVITY_TARGETS } from "@/lib/targets";
 
 const STRENGTH_TARGET_HARD_SETS_PER_WEEK = GUIDELINE_TARGETS.strengthHardSetsPerWeek;
-import type { StepSettings } from "@/lib/cardio";
+import type { DayWalking, StepSettings } from "@/lib/cardio";
 import { addDays } from "@/lib/dates";
 
 const WINDOW = 30;
@@ -78,9 +78,19 @@ function entry(overrides: EntryOverrides): BalanceEntry {
 }
 
 /** The same step count on every day of the window. */
-function flatSteps(perDay: number, days = WINDOW): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (let i = 0; i < days; i++) out[addDays(START, i)] = perDay;
+/**
+ * A window of identical days. Walking records rather than bare counts: brisk
+ * minutes decide how much of a day's surplus is credited at the brisk rate, and
+ * a day that reports none is all incidental walking — which is what a bare
+ * daily step total actually describes.
+ */
+function flatSteps(
+  perDay: number,
+  days = WINDOW,
+  activeMinutes: number | null = null,
+): Record<string, DayWalking> {
+  const out: Record<string, DayWalking> = {};
+  for (let i = 0; i < days; i++) out[addDays(START, i)] = { steps: perDay, activeMinutes };
   return out;
 }
 
@@ -141,11 +151,14 @@ describe("training profiles", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: [lifting(171)],
-      stepsByDate: flatSteps(5000),
+      walkingByDate: flatSteps(5000),
       stepSettings: HALF,
     });
 
-    expect(strengthPercent(result.cardioShare)).toBe(86);
+    // 88 rather than the 86 this read when every above-baseline step was
+    // credited at 3.5 METs: a bare daily total is incidental walking, and
+    // crediting it as brisk pushed a lifter cardio-ward.
+    expect(strengthPercent(result.cardioShare)).toBe(88);
     expect(result.confident).toBe(true);
   });
 
@@ -155,20 +168,20 @@ describe("training profiles", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: [lifting(64)],
-      stepsByDate: flatSteps(7000),
+      walkingByDate: flatSteps(7000),
       stepSettings: { mode: "half", baseline: 4500 },
     });
 
     expect(strengthPercent(result.cardioShare)).toBeGreaterThanOrEqual(50);
-    expect(strengthPercent(result.cardioShare)).toBeLessThanOrEqual(58);
+    expect(strengthPercent(result.cardioShare)).toBeLessThanOrEqual(62);
   });
 
   it("reads someone who runs four times a week and lifts twice as cardio", () => {
     const entries: BalanceEntry[] = [lifting(86)];
-    const steps: Record<string, number> = {};
+    const steps: Record<string, DayWalking> = {};
     for (let i = 0; i < WINDOW; i++) {
       const date = addDays(START, i);
-      steps[date] = 8000;
+      steps[date] = { steps: 8000 };
       // Four runs a week, 45 minutes each.
       if (i % 7 < 4) entries.push(running(2700, date));
     }
@@ -176,7 +189,7 @@ describe("training profiles", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries,
-      stepsByDate: steps,
+      walkingByDate: steps,
       stepSettings: HALF,
     });
 
@@ -188,7 +201,7 @@ describe("training profiles", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: [],
-      stepsByDate: flatSteps(12000),
+      walkingByDate: flatSteps(12000),
       stepSettings: HALF,
     });
 
@@ -205,7 +218,7 @@ describe("training profiles", () => {
           exercise: { slug: "walk", cardioBias: 1, mets: 3.5, muscles: [] },
         }),
       ],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: HALF,
     });
 
@@ -236,7 +249,7 @@ describe("buildBalance", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: [swings],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
 
@@ -250,7 +263,7 @@ describe("buildBalance", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: [running(3600, START)],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
 
@@ -264,27 +277,29 @@ describe("buildBalance", () => {
       windowDays: WINDOW,
       // A 45-minute run: about 7,400 steps by cadence.
       entries: [running(2700, date)],
-      stepsByDate: { [date]: 11000 },
+      walkingByDate: { [date]: { steps: 11000 } },
       stepSettings: HALF,
     });
 
     const withoutDedup = buildBalance({
       windowDays: WINDOW,
       entries: [],
-      stepsByDate: { [date]: 11000 },
+      walkingByDate: { [date]: { steps: 11000 } },
       stepSettings: HALF,
     });
 
     // The run's own steps are absorbed, so the day's walking adds nothing.
     expect(withRun.detail.stepMetMinutes).toBe(0);
-    expect(withoutDedup.detail.stepMetMinutes).toBeGreaterThan(100);
+    // Whereas the same day without a run logged earns the whole surplus:
+    // 7,000 steps above the baseline at the incidental rate, half weight.
+    expect(withoutDedup.detail.stepMetMinutes).toBeCloseTo((7000 / 110) * 2.8 * 0.5, 0);
   });
 
   it("reports the raw doses behind the marker, normalised per week", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: [lifting(171)],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
 
@@ -335,7 +350,7 @@ describe("buildBalance", () => {
       buildBalance({
         windowDays: WINDOW,
         entries,
-        stepsByDate: {},
+        walkingByDate: {},
         stepSettings: { mode: "off", baseline: 4000 },
       });
 
@@ -379,13 +394,13 @@ describe("buildBalance", () => {
     const on = buildBalance({
       windowDays: WINDOW,
       entries: [lifting(50)],
-      stepsByDate: flatSteps(14000),
+      walkingByDate: flatSteps(14000),
       stepSettings: HALF,
     });
     const off = buildBalance({
       windowDays: WINDOW,
       entries: [lifting(50)],
-      stepsByDate: flatSteps(14000),
+      walkingByDate: flatSteps(14000),
       stepSettings: { mode: "off", baseline: 4000 },
     });
 
@@ -397,13 +412,13 @@ describe("buildBalance", () => {
     const cardio = buildBalance({
       windowDays: WINDOW,
       entries: [running(3600, START)],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
     const strength = buildBalance({
       windowDays: WINDOW,
       entries: [lifting(171)],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
 
@@ -420,13 +435,13 @@ describe("the targets are configurable", () => {
     const base = buildBalance({
       windowDays: WINDOW,
       entries: [...lifting30, running(3600, START)],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
     const raised = buildBalance({
       windowDays: WINDOW,
       entries: [...lifting30, running(3600, START)],
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
       targets: LONGEVITY_TARGETS,
     });
@@ -442,7 +457,7 @@ describe("the targets are configurable", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: lifting30,
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
       targets: LONGEVITY_TARGETS,
     });
@@ -453,7 +468,7 @@ describe("the targets are configurable", () => {
     const result = buildBalance({
       windowDays: WINDOW,
       entries: lifting30,
-      stepsByDate: {},
+      walkingByDate: {},
       stepSettings: { mode: "off", baseline: 4000 },
     });
     expect(result.targets).toEqual(GUIDELINE_TARGETS);
