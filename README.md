@@ -256,6 +256,25 @@ If port 3000 is already taken on the host, set `APP_PORT` (in `.env`, or as a
 stack variable when deploying through Portainer) — the container always listens
 on 3000 internally, only the published port changes.
 
+The database lives in a Docker-managed volume called `snackexercise-data`. To
+put it somewhere else, set `APP_VOLUMES` to a whole mount spec — source and
+target, not just the source. The target must stay `/data`, which is where the
+container writes regardless:
+
+```bash
+APP_VOLUMES="/srv/snackexercise:/data"
+```
+
+A host path works with nothing else changed, but Docker leaves a bind-mounted
+directory's ownership exactly as it finds it — unlike a fresh managed volume,
+which it seeds from the image. A root-owned directory therefore fails at
+start-up with a read-only database, so hand it to the user the server runs as
+first: `sudo chown 1000:1000 /srv/snackexercise`.
+
+A *named* volume other than the default also has to be declared in the
+top-level `volumes:` block, or Compose rejects the project as referring to an
+undefined volume.
+
 Set `TZ` to your own zone in `docker-compose.yml`: it decides where one day ends
 and the next begins, so a 23:30 snack lands on the right evening. You can also
 override it later in Settings without redeploying.
