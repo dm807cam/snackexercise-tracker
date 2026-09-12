@@ -282,6 +282,42 @@ override it later in Settings without redeploying.
 The container applies migrations and seeds the exercise catalogue on every
 start. Both steps are idempotent, so restarting is always safe.
 
+### Running more than one instance
+
+Everything Compose creates — the container, the network, the managed volume —
+is prefixed with the project name, which defaults to the directory name. Give
+each instance its own `COMPOSE_PROJECT_NAME` and its own `APP_PORT` and they
+run side by side out of a single checkout:
+
+```bash
+cat > .env.home <<'EOF'
+COMPOSE_PROJECT_NAME="snack-home"
+APP_PORT="3000"
+EOF
+
+cat > .env.work <<'EOF'
+COMPOSE_PROJECT_NAME="snack-work"
+APP_PORT="3001"
+EOF
+
+docker compose --env-file .env.home up -d --build
+docker compose --env-file .env.work up -d --build
+```
+
+The volume is namespaced by project too, so the two databases stay separate
+without setting `APP_VOLUMES` at all. Set it only to move a database somewhere
+specific — and then give each instance its own source, because two containers
+writing one SQLite file will corrupt it.
+
+Through Portainer the stack name *is* the project name, so a second stack needs
+nothing but a different `APP_PORT`.
+
+The container is named after the project (`snack-home-app-1`) rather than a
+fixed `snackexercise-tracker`. A fixed name can exist only once per machine, so
+it was the one thing no amount of configuration could work around. Existing
+installs keep their data: the volume name derives from the project name, which
+has not changed — only the container is renamed, on its next recreation.
+
 ### Voice entry
 
 Optional, and the app is fully usable without it. Put an
