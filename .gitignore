@@ -7,7 +7,9 @@ generated/
 *.db-wal
 *.db-shm
 .env
-.env.local
+# Per-instance env files (.env.home, .env.work, ...) can carry an API key.
+.env.*
+!.env.example
 data/
 test-results/
 playwright-report/

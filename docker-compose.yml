@@ -2,7 +2,10 @@ services:
   app:
     build: .
     image: snackexercise-tracker
-    container_name: snackexercise-tracker
+    # Deliberately no container_name: a fixed one is unique per machine, so a
+    # second instance collides with the first however the rest is configured.
+    # Compose names the container after the project instead, which is what
+    # keeps two stacks apart.
     restart: unless-stopped
     ports:
       # Host port only. Override with APP_PORT if 3000 is taken.
