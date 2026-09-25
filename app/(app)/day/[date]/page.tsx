@@ -1,27 +1,24 @@
 import { notFound } from "next/navigation";
-import { DayView } from "@/components/DayView";
+import { DayView, type SnackCardData } from "@/components/DayView";
 import { isValidLocalDate, minutesOfDayInZone } from "@/lib/dates";
 import {
   getActiveWindow,
   getDaySummary,
   getExercises,
   getRecentExerciseIds,
+  getSetting,
   getTargetBouts,
-  loadStats,
 } from "@/lib/queries";
 import { getAppConfig } from "@/lib/app-config";
 import { requireUser } from "@/lib/auth/current";
-import { axisForMuscle } from "@/lib/muscles";
-import { buildSuggestion, type Suggestion } from "@/lib/suggest";
+import { spacingNudge } from "@/lib/suggest";
+import { getContexts, previewSnack, snacksOn } from "@/lib/snack/service";
+import { MAX_SNACK_MINUTES, MIN_SNACK_MINUTES } from "@/lib/snack/planner";
 
 export const dynamic = "force-dynamic";
 
-/**
- * The window the suggestion reasons over. Long enough that a single heavy
- * Tuesday cannot make an axis look permanently covered, short enough that
- * something you dropped a fortnight ago resurfaces.
- */
-const SUGGESTION_WINDOW = 30;
+/** The length the card opens on, until the user picks another (remembered). */
+const DEFAULT_SNACK_MINUTES = 3;
 
 export default async function DayPage({ params }: { params: Promise<{ date: string }> }) {
   const user = await requireUser();
@@ -38,32 +35,35 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
 
   // "What should I do next" is a statement about now. On a past day it would be
   // advice about a Tuesday in August, which is nobody's question.
-  let suggestion: Suggestion | null = null;
+  let snack: SnackCardData | null = null;
   if (date === config.today) {
-    const [stats, activeWindow, targetBouts] = await Promise.all([
-      // No previous-window comparison: the suggestion never reads it, and this
-      // runs again after every logged, edited or deleted set.
-      loadStats(user.id, SUGGESTION_WINDOW, config.today, config.timeZone, false),
+    const stored = Number(await getSetting(user.id, "snackMinutes"));
+    const minutes =
+      Number.isInteger(stored) && stored >= MIN_SNACK_MINUTES && stored <= MAX_SNACK_MINUTES
+        ? stored
+        : DEFAULT_SNACK_MINUTES;
+
+    const [{ contexts, activeId }, preview, snacks, activeWindow, targetBouts] = await Promise.all([
+      getContexts(user.id),
+      previewSnack(user.id, { minutes, focus: "auto", nonce: 0 }),
+      snacksOn(user.id, config.today),
       getActiveWindow(user.id),
       getTargetBouts(user.id),
     ]);
 
-    suggestion = buildSuggestion({
-      axes: stats.axes,
-      daysSinceCardio: stats.daysSinceCardio,
-      cardioMetMinutesPerWeek: stats.balance.detail.metMinutesPerWeek,
-      cardioTargetMetMinutesPerWeek: stats.targets.cardioMetMinutesPerWeek,
-      exercises,
-      recentIds,
-      axisOf: axisForMuscle,
-      progress: stats.progress,
-      now: {
+    snack = {
+      plan: preview.plan,
+      places: contexts.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+      activePlaceId: activeId,
+      defaultMinutes: minutes,
+      nudge: spacingNudge({
         nowMin: minutesOfDayInZone(new Date(), config.timeZone),
         boutMinutes: summary.spacing.boutMinutes,
         window: activeWindow,
         targetBouts,
-      },
-    });
+      }),
+      resumable: snacks.find((s) => s.status === "started") ?? null,
+    };
   }
 
   return (
@@ -94,7 +94,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       timeZone={config.timeZone}
       today={config.today}
       hasKey={config.hasKey}
-      suggestion={suggestion}
+      snack={snack ? JSON.parse(JSON.stringify(snack)) : null}
     />
   );
 }

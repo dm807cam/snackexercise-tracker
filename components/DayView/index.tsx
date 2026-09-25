@@ -16,11 +16,13 @@ import { formatSets, type Units } from "@/lib/format";
 import type { MuscleSlug } from "@/lib/muscles";
 import type { MuscleTotals } from "@/lib/scoring";
 import { buildDailyGoal } from "@/lib/daily-goal";
-import type { Suggestion } from "@/lib/suggest";
+import { SnackNow, type PlaceOption } from "@/components/Snack/SnackNow";
+import { SnackPlayer } from "@/components/Snack/SnackPlayer";
+import type { SnackPlan } from "@/lib/snack/types";
+import type { SnackView } from "@/lib/snack/service";
 import { DayHeader } from "./DayHeader";
 import { DaySpacing, type DaySpacingPayload } from "./DaySpacing";
 import { TodayGoal } from "./TodayGoal";
-import { NextUp } from "./NextUp";
 import { StepsField } from "./StepsField";
 import { EntryList, type DayEntry } from "./EntryList";
 import { useSwipeDays } from "./useSwipeDays";
@@ -43,6 +45,16 @@ export interface DayViewData {
   spacing: DaySpacingPayload;
 }
 
+/** What the "Snack now" card opens with; built on the server for today only. */
+export interface SnackCardData {
+  plan: SnackPlan | null;
+  places: PlaceOption[];
+  activePlaceId: string | null;
+  defaultMinutes: number;
+  nudge: string | null;
+  resumable: SnackView | null;
+}
+
 export function DayView({
   initial,
   exercises,
@@ -51,7 +63,7 @@ export function DayView({
   timeZone,
   today,
   hasKey,
-  suggestion,
+  snack,
 }: {
   initial: DayViewData;
   exercises: ExerciseOption[];
@@ -62,19 +74,20 @@ export function DayView({
   today: LocalDate;
   hasKey: boolean;
   /**
-   * What to train next. Computed on the server from the 30-day window, and
-   * absent when looking at a past day — "you should do this next" is a
-   * statement about now, not about a Tuesday in August.
+   * A snack to do right now. Planned on the server from the 30-day window, and
+   * absent when looking at a past day — "do this next" is a statement about
+   * now, not about a Tuesday in August.
    */
-  suggestion: Suggestion | null;
+  snack: SnackCardData | null;
 }) {
   const router = useRouter();
   const [day, setDay] = useState(initial);
   const [selected, setSelected] = useState<MuscleSlug | null>(null);
   const [adding, setAdding] = useState(false);
-  // The movement the suggestion bar proposed, carried into the log sheet so
-  // acting on a suggestion is one tap and not a search.
+  // A movement picked from the snack card, carried into the log sheet so
+  // logging it by hand is one tap and not a search.
   const [preselect, setPreselect] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<SnackView | null>(null);
   const [editing, setEditing] = useState<DayEntry | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -223,13 +236,36 @@ export function DayView({
         />
       )}
 
-      {suggestion && (
-        <NextUp
-          suggestion={suggestion}
+      {snack && (
+        <SnackNow
+          initialPlan={snack.plan}
+          places={snack.places}
+          activePlaceId={snack.activePlaceId}
+          defaultMinutes={snack.defaultMinutes}
+          nudge={snack.nudge}
+          resumable={snack.resumable}
+          onStart={setPlaying}
           onPick={(exerciseId) => {
             setPreselect(exerciseId);
             setAdding(true);
           }}
+          onError={(message) => setToast({ message, tone: "error" })}
+        />
+      )}
+
+      {playing && (
+        <SnackPlayer
+          snack={playing}
+          onClose={() => {
+            setPlaying(null);
+            router.refresh();
+          }}
+          onFinished={async (message) => {
+            setPlaying(null);
+            await refresh();
+            setToast({ message });
+          }}
+          onError={(message) => setToast({ message, tone: "error" })}
         />
       )}
 

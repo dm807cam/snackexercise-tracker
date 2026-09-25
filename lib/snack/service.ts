@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { prisma, transaction } from "../db";
 import { ApiError } from "../api";
-import { addDays, minutesOfDayInZone, type LocalDate } from "../dates";
+import { addDays, type LocalDate } from "../dates";
 import { buildDailyGoal } from "../daily-goal";
 import { entryMetMinutes } from "../cardio";
 import { nextRungs } from "../progression";
@@ -197,7 +197,6 @@ export async function plannerInputFor(userId: string, request: SnackRequest, ext
       request.focus,
       request.nonce,
       summary.spacing.bouts,
-      Math.floor(minutesOfDayInZone(new Date(nowMs), timeZone) / 60),
     ),
   };
   return { input, context, config };
@@ -238,6 +237,15 @@ export function snackView(row: {
 }
 
 export type SnackView = ReturnType<typeof snackView>;
+
+/**
+ * Plan a snack WITHOUT keeping it — what the day page shows before anyone taps
+ * Start. The seed is the situation, so starting it plans the same snack again.
+ */
+export async function previewSnack(userId: string, request: SnackRequest) {
+  const { input, context } = await plannerInputFor(userId, request);
+  return { plan: planSnack(input), contextId: context?.id ?? null };
+}
 
 /** Plan a snack and keep it, so the player can resume it and the result can be read against it. */
 export async function createSnack(userId: string, request: SnackRequest, trigger: "now" | "nudge" = "now") {

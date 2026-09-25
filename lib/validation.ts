@@ -223,6 +223,8 @@ export const settingsSchema = z.object({
    */
   birthYear: z.string().max(4).optional(),
   restingHr: z.string().max(3).optional(),
+  /** The length the snack card opens on, in minutes. */
+  snackMinutes: z.string().regex(/^(|[1-9]|1\d|20)$/).optional(),
 });
 
 /** A place the user trains, as the Places editor sends it. */
