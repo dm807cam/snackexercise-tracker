@@ -334,34 +334,56 @@ export function buildExerciseProgress(
  * migration and a seed pass to express something that is simply true.
  * A custom movement has no rung, which is correct — the app has no idea what
  * "Dennis's odd shoulder thing" is harder than.
+ *
+ * A rung may list ALTERNATIVES, hardest-first-choice first. The glute bridge's
+ * natural next step is the barbell hip thrust, which is no use in a hotel room;
+ * the single-leg bridge is the same progression with nothing but the floor. The
+ * snack planner takes the first alternative the user can actually do where they
+ * are; everything else reads the first.
  */
-const LADDER: Record<string, string> = {
+const LADDER: Record<string, string | readonly string[]> = {
   // Push
+  "wall-push-up": "incline-push-up",
+  "incline-push-up": "push-up",
   "push-up": "diamond-push-up",
   "diamond-push-up": "dip",
+  "chair-dip": "dip",
   "pike-push-up": "handstand-hold",
   // Pull
+  "towel-row": "inverted-row",
+  "band-row": "inverted-row",
   "inverted-row": "chin-up",
   "chin-up": "pull-up",
   // Legs
   "bodyweight-squat": "split-squat",
   "split-squat": "bulgarian-split-squat",
   "bulgarian-split-squat": "pistol-squat",
-  "glute-bridge": "hip-thrust",
+  "reverse-lunge": "bulgarian-split-squat",
+  "glute-bridge": ["hip-thrust", "single-leg-glute-bridge"],
+  "hamstring-walkout": "towel-hamstring-curl",
   "lunge": "bulgarian-split-squat",
   "step-up": "bulgarian-split-squat",
   // Core
   "sit-up": "hanging-leg-raise",
+  "dead-bug": "hollow-hold",
   "plank": "hollow-hold",
   "hollow-hold": "ab-wheel-rollout",
   "side-plank": "russian-twist",
   // Grip
   "dead-hang": "pull-up",
-  "calf-raise": "standing-calf-raise",
+  "calf-raise": ["standing-calf-raise", "single-leg-calf-raise"],
 };
 
+/** The next rung up, or null: the first alternative where there are several. */
 export function nextRung(slug: string): string | null {
-  return LADDER[slug] ?? null;
+  return nextRungs(slug)[0] ?? null;
+}
+
+/** Every alternative for the next rung up, in order of preference. */
+export function nextRungs(slug: string): readonly string[] {
+  const rung = LADDER[slug];
+  if (!rung) return [];
+  return typeof rung === "string" ? [rung] : rung;
 }
 
 /** "3 x 10", "60 kg x 5", "2m 30s" — how a day's best set was actually logged. */

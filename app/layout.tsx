@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { BottomNav } from "@/components/BottomNav";
 
 export const metadata: Metadata = {
   title: "Snack Tracker",
-  description: "Track exercise snacks and see which muscles you have actually trained.",
+  description: "Short workouts that fit between everything else — at home, in the office, in a hotel room.",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg", apple: "/icon-192.png" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Snacks" },
@@ -25,20 +24,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <main
-          className="mx-auto w-full max-w-lg"
-          style={{
-            // 16pt is Apple's standard layout margin; the notch only ever
-            // widens it.
-            paddingInlineStart: "max(1rem, env(safe-area-inset-left))",
-            paddingInlineEnd: "max(1rem, env(safe-area-inset-right))",
-          }}
-        >
-          {children}
-        </main>
-        <BottomNav />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

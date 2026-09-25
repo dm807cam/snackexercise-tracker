@@ -17,4 +17,6 @@ playwright-report/
 *.tsbuildinfo
 next-env.d.ts
 e2e/e2e.db*
+# Sessions saved by the Playwright setup project.
+e2e/.auth/
 dist/

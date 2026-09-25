@@ -2,27 +2,42 @@
 
 [![CI](https://github.com/dm807cam/snackexercise-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/dm807cam/snackexercise-tracker/actions/workflows/ci.yml)
 
-A workout log for people who don't do workouts.
+A workout log, and a coach that taps you on the shoulder, for people who don't
+do workouts.
 
-If you train by wandering into the basement a few times a day and picking
-something heavy up, ordinary fitness apps get in the way: they assume a session
-with a plan, a start and an end, and they make you type. This one assumes the
-opposite. You log a snack in a sentence, and it answers the question that
-actually matters when training is unstructured — **am I hitting everything, or
-have I quietly not trained hamstrings in three weeks?**
+If your training happens in the gaps of the day — three minutes in a hotel room
+before a call, a flight of stairs at the station, something heavy in the
+basement between meetings — ordinary fitness apps get in the way: they assume a
+session with a plan, a start and an end, and they make you type. This one
+assumes the opposite. It proposes a snack sized to **the minutes you have and
+the place you are in**, walks you through it, says when the next one is due,
+and answers the question that actually matters when training is unstructured —
+**am I hitting everything, or have I quietly not trained hamstrings in three
+weeks?**
 
-Self-hosted, single container, SQLite on a volume. No account, no cloud.
+Self-hosted, single container, SQLite on a volume. Accounts for everyone in the
+household or team, each log private to its owner. No cloud.
 
 ## What it does
 
 **Today** — two closing rings showing how much strength and cardio today still
-owes, a bar proposing what to train next and why, then front
-and back body diagrams filled in blue for what you've lifted and outlined in
-orange for what you've run, a timeline of how the
-day's snacks were spread, and a chronological list of the day's entries.
-Chevrons top-left or a horizontal swipe move between days. Tap a muscle to
-filter the list to it; tap the suggestion to log it with the movement already
-chosen.
+owes; the **Snack now** card, with a snack you could do right here in the
+minutes you have, one tap from starting, and when the next one is planned; then
+front and back body diagrams filled in blue for what you've lifted and outlined
+in orange for what you've run, a timeline of how the day's snacks were spread,
+and a chronological list of the day's entries. Chevrons top-left or a
+horizontal swipe move between days. Tap a muscle to filter the list to it; tap
+a movement on the card to log it by hand instead.
+
+**The snack player** — Start opens it full screen: one movement at a time, the
+reps or a clock for holds and intervals, rests counted down, cues for form, and
+a summary where you correct what you actually did before it is logged. Stop
+early and it offers to log what you did.
+
+**Nudges** — switched on per device, a notification when a snack is due, spread
+across your waking hours around your busy times, with the snack already planned
+for wherever you are. "In 30 min" snoozes it. The same plan is available as a
+calendar feed.
 
 **Calendar** — a month at a glance, each day washed blue by the strength it
 carried and ringed orange if it carried cardio, plus active days, current
@@ -40,6 +55,10 @@ kilos and a two minute plank" becomes two entries. Every entry carries a time
 you can set or correct, so a run done at 06:30 and remembered at 21:00 is a
 morning run. Nothing is written until you confirm, and anything can be deleted
 (with undo).
+
+**Settings** — your places and what each one has, nudges, targets, tokens for
+automations, and your account and signed-in devices. **Administration**, for
+admins: invitations, accounts, who may sign up, and the audit log.
 
 ### Effective sets, not tonnage
 
@@ -188,7 +207,7 @@ longest hold for a plank — and how long the best has stood.
 
 A movement trained six or more times over four or more weeks without its best
 moving is marked **stalled**, appears in "needs attention", and, where the
-catalogue has a harder variation, the suggestion bar proposes the next rung
+catalogue has a harder variation, the snack planner proposes the next rung
 instead (push-up → diamond push-up → dip) and says why. A fixed-load movement
 cannot progress by adding weight, so the next variation *is* the progression.
 See [ADR 0018](./docs/adr/0018-progression-is-a-per-movement-best-set.md).
@@ -226,19 +245,55 @@ picture is on the stats page. A rest day shows two open rings and the copy never
 scolds; there is no streak to break. [ADR
 0014](./docs/adr/0014-a-daily-share-with-no-carry-over.md).
 
-### What to do next
+### A snack for right now
 
-The day page opens with one line: the muscle group that has waited longest, a
-movement from the catalogue that trains it, and the reason. It ranks the twelve
-axes on staleness (days since last trained, dominant) and volume deficit
-(against your best-served axis, as the tie-break), with cardio competing as a
-thirteenth pseudo-axis against its own guideline — so a fortnight of lifting and
-no running produces "go for a run" rather than a thirteenth way to say "back".
-If it has been a while since your last snack, the bar says that too.
+The day opens with a snack you could do now: one to four movements, dosed for
+you, that fit **where you are** and **the minutes you have**, each with the
+reason it was chosen.
 
-It is a nudge, not a prescription: it has no idea what equipment is to hand or
-what hurts today, which is why it shows its reasoning, offers two alternatives,
-and gates nothing.
+Where you are is a *place* — every account starts with Home, Office, Hotel room
+and On the move, and you tick once what each one has. The vocabulary is
+furniture as much as kit, because a hotel room has a chair, a desk, a wall, a
+door and a towel, and each of those opens up movements a bare floor does not:
+incline push-ups, chair dips, towel rows. A place also says whether it must stay
+**quiet** (someone asleep downstairs), whether the **floor** is an option, and
+how much **sweat** is acceptable before your next meeting.
+
+What goes in the snack comes from five signals multiplied together: what the
+week is short of (staleness first, weekly deficit second, cardio competing on
+the same scale), what the last few hours already covered (fatigue per muscle
+decaying over about a day, so push-ups an hour ago mean back now), what today's
+rings still ask, what this place allows, and what you actually do when a
+movement is proposed — a per-movement record of done, skipped and swapped,
+sampled rather than averaged so the planner keeps learning. Doses progress from
+your own last set and how hard you said it was. See [ADR
+0026](./docs/adr/0026-the-planner-proposes-for-a-place.md).
+
+It is a proposal, not a prescription: it has no idea what hurts today, which is
+why every block shows its reasoning, any block can be swapped, "Something else"
+asks again, and nothing is gated on doing what it says. A snack is recorded as
+a proposal and what became of it; the log only ever holds what you did ([ADR
+0025](./docs/adr/0025-a-snack-is-a-proposal-not-a-session.md)).
+
+### Nudges
+
+The app decides when to speak by running the spacing score's own ideal forward:
+the snacks still owed today, spread evenly across what is left of your waking
+hours, measured from the last one you logged. Log one early and the rest spread
+out behind it; miss one and the next is due now. Nothing carries over, and a
+snack that no longer fits before the evening is dropped rather than crammed in.
+Recurring busy times are routed around, and you can pause for an hour, the rest
+of the day or a week.
+
+At most one nudge per snack, plus an optional single follow-up and whatever you
+snooze, under a daily cap, never while you are mid-snack. The snack is planned
+when the nudge is sent, so it fits where you are then. Each nudge is sent once
+however many copies of the app are running. See [ADR
+0027](./docs/adr/0027-nudges-run-the-spacing-ideal-forward.md).
+
+Nudges are Web Push, so they need HTTPS; on iPhone and iPad, add the app to the
+Home Screen first (iOS 16.4 or later). Settings → Nudges walks through it and
+sends a test.
 
 ## Running it
 
@@ -249,8 +304,22 @@ cp .env.example .env        # optional; set TZ and an OpenRouter key
 docker compose up -d --build
 ```
 
-Then open `http://<your-host>:3000`. On a phone, use "Add to Home Screen" — it
-installs as a standalone app.
+Then open `http://<your-host>:3000`. A fresh instance sends its first visitor to
+`/setup` to create the admin account — so that is you, either be first, set
+`SETUP_TOKEN` (the page asks for it), or set `ADMIN_EMAIL` and `ADMIN_PASSWORD`
+to create the admin at start-up. Everyone else joins by an invitation link from
+Administration. An instance that predates accounts keeps its log: the first
+admin inherits it.
+
+On a phone, use "Add to Home Screen" — it installs as a standalone app, and on
+iPhone that is also what lets it receive nudges.
+
+**Reaching it from outside your network** — which the travelling half of the
+premise needs — means HTTPS in front: a reverse proxy such as Caddy, or a
+tunnel. Set `APP_URL` to the public address and `TRUST_PROXY` to the number of
+proxies. Nudges need HTTPS in any case. [docs/operations.md](./docs/operations.md)
+covers this, health checks, metrics, backups, upgrades and recovery;
+[SECURITY.md](./SECURITY.md) covers what is protected and how.
 
 If port 3000 is already taken on the host, set `APP_PORT` (in `.env`, or as a
 stack variable when deploying through Portainer) — the container always listens
@@ -271,9 +340,10 @@ unlike a fresh managed volume, which it seeds from the image. A root-owned
 directory therefore fails at start-up with a read-only database, so hand it to
 the user the server runs as first: `sudo chown 1000:1000 /srv/snackexercise`.
 
-Set `TZ` to your own zone in `docker-compose.yml`: it decides where one day ends
-and the next begins, so a 23:30 snack lands on the right evening. You can also
-override it later in Settings without redeploying.
+Set `TZ` to your own zone in `docker-compose.yml`: it is the zone a new account
+starts in, and decides where one day ends and the next begins, so a 23:30 snack
+lands on the right evening. Everyone can set their own in Settings — someone
+who flies Berlin to Boston changes it on landing.
 
 The container applies migrations and seeds the exercise catalogue on every
 start. Both steps are idempotent, so restarting is always safe.
@@ -281,8 +351,9 @@ start. Both steps are idempotent, so restarting is always safe.
 ### Voice entry
 
 Optional, and the app is fully usable without it. Put an
-[OpenRouter](https://openrouter.ai) key in Settings (or set `OPENROUTER_API_KEY`
-before the first run) and the "Say it" tab appears. Dictate with your phone
+[OpenRouter](https://openrouter.ai) key in Settings and the "Say it" tab
+appears. An admin can share one key with everyone who has none of their own
+(Administration, or `OPENROUTER_API_KEY` on the first run). Dictate with your phone
 keyboard's microphone; the text goes to OpenRouter, which returns structured
 entries constrained by a strict JSON schema.
 
@@ -296,12 +367,16 @@ exports.
 
 ### Steps from your phone
 
-The realistic way to get steps in is an automation. On iOS, a Shortcut:
+The realistic way to get steps in is an automation, with a token that can do
+nothing but record steps: Settings → Apps and automations → New token, tick
+*Record steps and brisk minutes*, and copy it (it is shown once). On iOS, a
+Shortcut:
 
 1. **Get Health Sample** — Steps, *Today*, Sum
 2. **Get Health Sample** — Exercise Minutes, *Today*, Sum
-3. **Get Contents of URL** — `http://<your-host>:3000/api/metrics/` + today's
-   date as `yyyy-MM-dd`, method `PUT`, request body JSON
+3. **Get Contents of URL** — `https://<your-host>/api/metrics/` + today's
+   date as `yyyy-MM-dd`, method `PUT`, header
+   `Authorization: Bearer <your token>`, request body JSON
    `{"steps": <the number>, "activeMinutes": <the minutes>, "source": "shortcut"}`
 
 Add it to a personal automation at 23:50 daily. The endpoint upserts, so
@@ -314,8 +389,11 @@ shop; minutes the phone counted as brisk are credited at the brisk rate
 instead. Leave it out of the body entirely and whatever is already recorded for
 that day stays — the app only clears it when you explicitly send `null`.
 
-There is no authentication on the app, so this needs nothing but the URL — which
-is also why it should stay on your own network.
+The token can be revoked from Settings at any time, and can do nothing else —
+not read your log, not sign in, not issue more tokens. The same kind of token,
+with the *calendar* scope, is what Settings → Apps and automations → *Get a
+calendar link* issues for subscribing to your snack plan from Apple Calendar,
+Google Calendar or Outlook.
 
 To backfill history, Settings takes a CSV with a date column and a steps column;
 an Apple Health, Google Fit or Fitbit export works as-is, and several rows for
@@ -323,19 +401,25 @@ the same day are added together.
 
 ### Backups
 
-Everything lives in one SQLite file on the `snackexercise-data` volume.
+Everything lives in one SQLite file on the `snackexercise-data` volume. Take a
+consistent copy while it runs, then copy it out:
 
 ```bash
-# copy the database out
-docker compose cp app:/data/app.db ./backup-$(date +%F).db
+docker exec snackexercise-tracker node dist/admin.mjs backup /data/backup-$(date +%F).db
+docker cp snackexercise-tracker:/data/backup-$(date +%F).db .
 ```
+
+The same CLI lists accounts, issues a password-reset link, makes an admin and
+re-enables an account — the way back in if the only admin forgets their
+password. See [docs/operations.md](./docs/operations.md).
 
 Settings → *Export everything* also produces a JSON file containing your entries
 **and** the exercise catalogue with its muscle and cardio weightings, **and**
 your daily step counts — entries alone couldn't reproduce the body map, the
 radar or the balance marker. Importing adds to what's there and skips entries it
 recognises, so re-importing the same file won't double your history. Exports
-from before cardio existed (`version: 1`) still restore.
+from before cardio existed (`version: 1`) still restore. An export is per
+account: yours, and the movements you can see.
 
 ## Development
 
@@ -346,13 +430,24 @@ npx prisma migrate deploy && npm run db:seed
 npm run dev
 ```
 
+Then open `http://localhost:3000` (localhost, not `127.0.0.1`: the dev server
+only serves its hot-reload socket to the origin it was started for), which
+sends you to `/setup` for the first account.
+
 | Command | |
 | --- | --- |
 | `npm run dev` | dev server |
 | `npm run build` | production build |
-| `npm test` | unit tests (Vitest) |
-| `npm run test:e2e` | browser smoke tests (Playwright) |
+| `npm test` | unit and integration tests (Vitest) |
+| `npm run test:e2e` | browser tests (Playwright) |
 | `npm run typecheck` | TypeScript |
+| `npm run admin -- list` | the operator CLI, against your dev database |
+
+The integration tests (`tests/integration/`) run the real route handlers
+against a freshly migrated SQLite file per test file, as several signed-in
+people and tokens: isolation between accounts, the account flows, token scopes,
+and the nudge job with Web Push stubbed. The browser tests start from a fresh
+instance, create the first admin through `/setup`, and run signed in.
 
 ### CI
 
@@ -361,11 +456,13 @@ in two parallel jobs:
 
 - **Typecheck, unit tests, build, browser tests** — the commands in the table
   above, on Node 22 to match the container.
-- **Container builds and serves** — builds the image, starts it, and checks that
-  `/api/health` comes up and the catalogue actually seeded. Building is not the
-  same as working: the runtime stage assembles the standalone bundle, the Prisma
-  CLI and the seed by hand, and a mistake there only shows when the container is
-  asked to start.
+- **Container builds and serves** — builds the image, starts it with an admin
+  created from the environment, waits for `/api/ready` (migrated, seeded),
+  signs in, reads the catalogue with the session, checks an anonymous read is
+  refused, and runs the operator CLI inside it. Building is not the same as
+  working: the runtime stage assembles the standalone bundle, the Prisma CLI,
+  the seed and the CLI by hand, and a mistake there only shows when the
+  container is asked to start.
 
 To reproduce a CI failure locally, run the same sequence from a clean checkout —
 `generated/` is gitignored, so `npx prisma generate` comes first or nothing
@@ -384,28 +481,49 @@ PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromium npm run test:e2e
 ### Layout
 
 ```
-app/                 pages and API routes
+app/
+  (app)/             the signed-in pages: today, snack player, calendar, stats,
+                     settings, admin
+  (auth)/            setup, sign-in, sign-up, invitations, password resets
+  api/               the API; every route starts with authenticate()
 components/
   BodyMap/           front/back diagrams and their geometry
   DayView/           day page: header, swipe, entry list, spacing, goal rings
+  Snack/             the Snack now card, plan preview and guided player
   QuickAdd/          the "Say it" / "Manual" sheet
+  Settings/          places, nudges, tokens, account, and the rest
+  Admin/             the administration console
   Stats/             radar chart, balance gradient, spacing card
 lib/
+  auth/              passwords, sessions, tokens and scopes, links, the guard
+  snack/             the snack planner, places and equipment, readiness,
+                     preferences, dosing, the nudge schedule (pure), and the
+                     services that feed them
+  jobs/              the scheduler: nudges, housekeeping, leases
+  queries.ts         every read, scoped by user id first
   muscles.ts         muscle taxonomy — the single source of truth
   scoring.ts         effective-set aggregation (pure, unit tested)
   cardio.ts          MET-minutes, pace equations, step credit (pure)
   balance.ts         the strength/cardio index (pure)
   spacing.ts         how well a day was broken up (pure)
   daily-goal.ts      how much of today is still to do (pure)
-  suggest.ts         what to train next, and why (pure)
+  suggest.ts         which muscle group has waited longest (pure)
+  push.ts            Web Push delivery
   dates.ts           local-day arithmetic and formatting
   openrouter.ts      LLM client and response schema
-prisma/              schema, migrations, exercise catalogue seed
+prisma/              schema, migrations, catalogue seed, operator CLI
+tests/               unit tests; integration/ runs the real routes
+e2e/                 browser tests
 ```
 
 A few decisions worth knowing before changing things:
 
 - **`SetEntry` has no parent workout or session.** The absence is the design.
+  A guided snack is recorded beside the log, never above it
+  ([ADR 0025](./docs/adr/0025-a-snack-is-a-proposal-not-a-session.md)).
+- **Every query takes the user id first.** There is no ambient current user a
+  query could forget to filter on
+  ([ADR 0023](./docs/adr/0023-accounts-own-their-data.md)).
 - **`localDate` is stored, not derived at query time.** Day boundaries follow
   your configured zone, and a denormalised `YYYY-MM-DD` keeps every day,
   calendar and window query an index scan with no timezone arithmetic.

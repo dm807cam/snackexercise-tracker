@@ -2,6 +2,8 @@ import { z } from "zod";
 import { MUSCLE_SLUGS } from "./muscles";
 import { isValidLocalDate } from "./dates";
 import { EFFORT_LEVELS } from "./effort";
+import { EQUIPMENT_SLUGS, isEquipmentSlug, parseRequirements } from "./snack/equipment";
+import { CONTEXT_KINDS } from "./snack/contexts";
 
 export const localDateSchema = z.string().refine(isValidLocalDate, {
   message: "Expected a valid YYYY-MM-DD date",
@@ -90,6 +92,42 @@ export const entryUpdateSchema = z.object({
  * reset: editing Run's muscle mapping would turn every run in the history into
  * full strength volume and zero its MET-minutes.
  */
+/**
+ * A requirement spec ("chair|bench towel"), accepted only when every slug in it
+ * is one the app knows — a typo would otherwise become a requirement nobody can
+ * ever meet, and the movement would silently never be proposed.
+ */
+const requirementSpecSchema = z
+  .string()
+  .max(300)
+  .refine(
+    (spec) => (parseRequirements(spec) ?? []).every((group) => group.every(isEquipmentSlug)),
+    { message: "Unknown equipment in the requirement" },
+  );
+
+/**
+ * What a movement needs, and a snack-sized dose of it. Every field nullable:
+ * null means "not described", and the planner infers from the category.
+ */
+export const snackProfileSchema = z.object({
+  equipment: requirementSpecSchema.nullable(),
+  load: requirementSpecSchema.nullable(),
+  impact: z.number().int().min(0).max(2).nullable(),
+  floor: z.boolean().nullable(),
+  sweat: z.number().int().min(0).max(2).nullable(),
+  snackReps: z
+    .string()
+    .regex(/^\d{1,3}-\d{1,3}$/, { message: "Expected a rep range like 8-12" })
+    .refine((v) => {
+      const [low, high] = v.split("-").map(Number);
+      return low >= 1 && high >= low;
+    }, { message: "The range must run from low to high" })
+    .nullable(),
+  snackSeconds: z.number().int().min(5).max(3600).nullable(),
+  unilateral: z.boolean().nullable(),
+  cues: z.string().max(1000).nullable(),
+});
+
 const exerciseFieldsSchema = z.object({
   name: z.string().min(1).max(80),
   category: z.enum([
@@ -107,10 +145,12 @@ const exerciseFieldsSchema = z.object({
   cardioBias: z.number().min(0).max(1),
   mets: z.number().min(1).max(23).nullish(),
   muscles: z.array(muscleWeightSchema).min(1).max(19),
-});
+}).extend(snackProfileSchema.shape);
 
 /** Creating an exercise: defaults apply, only name and muscles are required. */
-export const exerciseInputSchema = exerciseFieldsSchema.extend({
+export const exerciseInputSchema = exerciseFieldsSchema.partial().extend({
+  name: exerciseFieldsSchema.shape.name,
+  muscles: exerciseFieldsSchema.shape.muscles,
   category: exerciseFieldsSchema.shape.category.default("other"),
   bodyweight: z.boolean().default(false),
   cardioBias: z.number().min(0).max(1).default(0),
@@ -183,4 +223,20 @@ export const settingsSchema = z.object({
    */
   birthYear: z.string().max(4).optional(),
   restingHr: z.string().max(3).optional(),
+  /** Nudge preferences; see lib/snack/nudge-settings.ts. */
+  nudgeFollowUp: z.enum(["on", "off", ""]).optional(),
+  nudgeMaxPerDay: z.string().regex(/^(|[1-9]|1\d|2[0-4])$/).optional(),
+  nudgeDays: z.string().regex(/^(|\d{1,3})$/).optional(),
+  /** The length the snack card opens on, in minutes. */
+  snackMinutes: z.string().regex(/^(|[1-9]|1\d|20)$/).optional(),
+});
+
+/** A place the user trains, as the Places editor sends it. */
+export const contextFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  kind: z.enum(CONTEXT_KINDS as [string, ...string[]]),
+  equipment: z.array(z.enum(EQUIPMENT_SLUGS as [string, ...string[]])).max(EQUIPMENT_SLUGS.length),
+  quiet: z.boolean(),
+  floor: z.boolean(),
+  sweat: z.number().int().min(0).max(2),
 });

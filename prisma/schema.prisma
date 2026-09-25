@@ -3,20 +3,176 @@
 // The unit of logging is a SetEntry: one thing you picked up and moved, at a
 // point in time. There is deliberately no "workout" or "session" entity — the
 // whole premise is that training happens in scattered snacks, not sessions.
+//
+// Everything a person logs, measures or configures belongs to exactly one User,
+// and every read in lib/queries.ts is scoped by that user's id. The exercise
+// catalogue is the one shared thing: rows with no owner are the catalogue every
+// account sees, rows with an owner are movements that account added itself.
+// See docs/adr/0023-accounts-own-their-data.md.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  // Lets the schema say "catalogue names are unique" without also forbidding
+  // two different people from each adding a movement called "Jefferson curl".
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
   provider = "sqlite"
 }
 
+// --- accounts ---------------------------------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  /// Trimmed and lower-cased on the way in, and the sign-in form does the
+  /// same, so "Ann@Example.com" and "ann@example.com" are one account.
+  email        String    @unique
+  name         String?
+  /// A self-describing scrypt hash (lib/auth/password.ts). Null means the
+  /// account cannot sign in with a password yet: the owner of a database that
+  /// predates accounts, waiting for /setup to claim it.
+  passwordHash String?
+  /// "admin" | "member". Admins manage accounts and the shared catalogue; they
+  /// cannot read anybody else's log.
+  role         String    @default("member")
+  /// Set when an admin disables the account. Its sessions and tokens stop
+  /// working on the next request; its data is kept.
+  disabledAt   DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions          Session[]
+  apiTokens         ApiToken[]
+  authLinks         AuthLink[]
+  exercises         Exercise[]
+  entries           SetEntry[]
+  dailyMetrics      DailyMetric[]
+  settings          Setting[]
+  contexts          TrainingContext[]
+  snacks            Snack[]
+  preferences       ExercisePreference[]
+  pushSubscriptions PushSubscription[]
+  nudges            Nudge[]
+  busyBlocks        BusyBlock[]
+}
+
+/// A signed-in browser. The cookie carries a random token; only its SHA-256 is
+/// stored, so a copy of the database cannot be replayed as a login.
+model Session {
+  /// SHA-256 of the cookie value, hex.
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  ip         String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// A credential for an automation — the nightly steps Shortcut, a calendar
+/// feed — that should not hold a whole browser session. Scoped, revocable, and
+/// like a session stored only as a hash.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  /// SHA-256 of the token, hex.
+  tokenHash  String    @unique
+  /// The first characters of the token, so Settings can tell two apart.
+  prefix     String
+  /// Space-separated scopes; see lib/auth/scopes.ts.
+  scopes     String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
+
+/// A one-time link: an invitation to create an account, or a password reset.
+model AuthLink {
+  id          String    @id @default(cuid())
+  /// "invite" | "reset"
+  purpose     String
+  /// SHA-256 of the token in the link, hex.
+  tokenHash   String    @unique
+  /// An invite may be addressed to someone; a reset always names its account.
+  email       String?
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The role an invited account is created with.
+  role        String    @default("member")
+  createdById String?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  @@index([expiresAt])
+}
+
+/// Who did what to which account. Deliberately no foreign keys: the record of
+/// an account being deleted has to outlive the account.
+model AuditEvent {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  /// Who did it. Null for the system and for a failed sign-in.
+  actorId   String?
+  /// Whose account it concerned, when that is not the actor's own.
+  targetId  String?
+  action    String
+  ip        String?
+  userAgent String?
+  /// Small JSON object with whatever else is worth knowing.
+  detail    String?
+
+  @@index([at])
+  @@index([actorId, at])
+  @@index([targetId, at])
+}
+
+/// Settings that belong to the installation rather than to anyone in it.
+model InstanceSetting {
+  key   String @id
+  value String
+}
+
+/// Fixed-window counters for rate limiting. In the database rather than in
+/// memory so a restart does not reset them and two replicas share them.
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+}
+
+/// A lease on a background job, so only one replica runs it at a time.
+model JobLease {
+  name      String   @id
+  holder    String
+  expiresAt DateTime
+}
+
+// --- the log ----------------------------------------------------------------
+
 model Exercise {
-  id        String  @id @default(cuid())
-  name      String  @unique
-  slug      String  @unique
+  id      String  @id @default(cuid())
+  /// Null for the shared catalogue, which every account sees and only an admin
+  /// may edit; a user id for a movement that account added itself.
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name      String
+  slug      String
   category  String  @default("other")
   /// True for movements normally done without external load (push-ups, pull-ups).
   /// Lets the UI stop nagging for a weight that was never going to exist.
@@ -34,10 +190,44 @@ model Exercise {
   /// Activities. Only consulted when neither heart rate nor pace is known.
   mets       Float?
 
-  muscles ExerciseMuscle[]
-  entries SetEntry[]
+  // What it takes to do this movement right now — the snack planner's view of
+  // it (lib/snack/profile.ts). Every field is nullable, and null means "not
+  // described", which the planner fills in from the category rather than
+  // guessing silently in the other direction.
+
+  /// Space-separated requirements, each a "|"-separated set of alternatives:
+  /// "chair|bench" needs one of the two, "pullup-bar towel" needs both. Empty
+  /// string means nothing at all. See lib/snack/equipment.ts.
+  equipment    String?
+  /// Optional kit that adds load when it is to hand ("dumbbells|kettlebell").
+  load         String?
+  /// 0 silent, 1 audible, 2 jumping — what the room below a hotel room hears.
+  impact       Int?
+  /// Needs you to get down on the floor.
+  floor        Boolean?
+  /// 0 fine in work clothes, 1 warm, 2 needs a shower — at a snack's dose.
+  sweat        Int?
+  /// A snack-sized set: a rep range "8-12", or a hold or interval in seconds.
+  snackReps    String?
+  snackSeconds Int?
+  /// Done one side at a time, so a set takes twice as long.
+  unilateral   Boolean?
+  /// One coaching cue per line, shown in the guided player.
+  cues         String?
+
+  muscles     ExerciseMuscle[]
+  entries     SetEntry[]
+  preferences ExercisePreference[]
 
   createdAt DateTime @default(now())
+
+  @@unique([ownerId, slug])
+  @@unique([ownerId, name])
+  /// SQLite treats every NULL as distinct, so the two above cannot keep the
+  /// catalogue itself free of duplicates. These can.
+  @@unique([slug], map: "Exercise_catalogue_slug_key", where: { ownerId: null })
+  @@unique([name], map: "Exercise_catalogue_name_key", where: { ownerId: null })
+  @@index([ownerId])
 }
 
 /// How much a single set of an exercise counts toward each muscle.
@@ -56,9 +246,12 @@ model ExerciseMuscle {
 model SetEntry {
   id String @id @default(cuid())
 
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   /// Full timestamp, used for chronological ordering within a day.
   performedAt DateTime
-  /// "YYYY-MM-DD" in the configured local timezone. Denormalised so that every
+  /// "YYYY-MM-DD" in the user's configured timezone. Denormalised so that every
   /// day/calendar/window query is an index scan with no timezone arithmetic.
   localDate   String
 
@@ -82,14 +275,23 @@ model SetEntry {
   effort      String?
   notes       String?
 
-  /// "manual" | "llm" — lets you see which entries came from dictation.
+  /// "manual" | "llm" | "snack" — lets you see which entries came from
+  /// dictation, and which from the guided player.
   source String @default("manual")
+
+  /// The guided snack this entry was logged from, if any. Provenance, not
+  /// structure: nothing in the scoring reads it, an entry without one is
+  /// exactly as real, and deleting the snack leaves the entry standing.
+  snackId String?
+  snack   Snack?  @relation(fields: [snackId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
-  @@index([localDate])
-  @@index([performedAt])
+  @@index([userId, localDate])
+  @@index([userId, performedAt])
+  @@index([userId, exerciseId])
   @@index([exerciseId])
+  @@index([snackId])
 }
 
 /// One row per local day: things that are true *of the day* rather than
@@ -100,7 +302,9 @@ model SetEntry {
 /// lying. Keyed on the same "YYYY-MM-DD" every other query already uses, so
 /// joining a day, a window or a calendar grid costs one index lookup.
 model DailyMetric {
-  localDate String @id
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate String
   steps     Int?
   /// Minutes the phone counted as brisk or active, when it reports them.
   /// The only thing that lets the app tell 6,000 extra slow steps from 6,000
@@ -112,9 +316,148 @@ model DailyMetric {
   /// typed or came from a phone automation.
   source    String   @default("manual")
   updatedAt DateTime @updatedAt
+
+  @@id([userId, localDate])
 }
 
+/// A user's own settings: units, timezone, targets, waking hours, nudges.
 model Setting {
-  key   String @id
-  value String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key    String
+  value  String
+
+  @@id([userId, key])
+}
+
+// --- snacks -----------------------------------------------------------------
+
+/// A place the user trains, and what is to hand there. "Hotel room" and "Home"
+/// are different answers to "what can I do right now", and the snack planner is
+/// only as good as its answer to that.
+model TrainingContext {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  /// "home" | "hotel" | "travel" | "office" | "gym" | "outdoors" | "other"
+  kind      String
+  /// Space-separated equipment slugs available here; see lib/snack/equipment.ts.
+  equipment String   @default("")
+  /// Nothing that thumps: the room below, the colleagues, a sleeping partner.
+  quiet     Boolean  @default(false)
+  /// Getting down on the floor is fine here.
+  floor     Boolean  @default(true)
+  /// 0 must stay presentable, 1 a little warm is fine, 2 anything goes.
+  sweat     Int      @default(2)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  snacks Snack[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+/// One proposed snack — asked for from the day page, or offered by a nudge —
+/// and what became of it. Not a workout: entries never need one, and the plan
+/// is kept only so the player can resume after a reload and so adherence can be
+/// read against what was actually asked. See docs/adr/0025-a-snack-is-a-proposal-not-a-session.md.
+model Snack {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate  String
+  contextId  String?
+  context    TrainingContext? @relation(fields: [contextId], references: [id], onDelete: SetNull)
+  /// "now" (asked for in the app) | "nudge" (offered by a reminder)
+  trigger    String    @default("now")
+  /// "proposed" | "started" | "done" | "skipped" | "expired"
+  status     String    @default("proposed")
+  /// The minutes the user said they had.
+  minutes    Int
+  /// The plan as proposed, JSON; see lib/snack/types.ts.
+  plan       String
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  entries SetEntry[]
+  nudge   Nudge?
+
+  @@index([userId, localDate])
+  @@index([userId, status])
+}
+
+/// How a user has answered a movement when the planner proposed it. Feeds the
+/// planner's preference model (lib/snack/preference.ts).
+model ExercisePreference {
+  userId     String
+  exerciseId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  done       Int      @default(0)
+  skipped    Int      @default(0)
+  swapped    Int      @default(0)
+  /// "Never suggest this": a bad shoulder, a movement they simply hate.
+  blocked    Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@id([userId, exerciseId])
+}
+
+/// A browser that has agreed to receive nudges (Web Push).
+model PushSubscription {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+  failures      Int       @default(0)
+
+  @@index([userId])
+}
+
+/// A reminder that was sent. The unique key is what makes sending idempotent:
+/// two replicas racing to nudge the same person about the same snack cannot
+/// both win the insert.
+model Nudge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate String
+  /// Which of the day's snacks this was for (1-based), and which reminder for
+  /// it: 0 the first, 1 the single follow-up.
+  slot      Int
+  attempt   Int      @default(0)
+  sentAt    DateTime @default(now())
+  /// How many devices accepted it.
+  delivered Int      @default(0)
+  /// The snack the nudge offered.
+  snackId   String?  @unique
+  snack     Snack?   @relation(fields: [snackId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, localDate, slot, attempt])
+  @@index([sentAt])
+}
+
+/// A recurring stretch of the week the user cannot be interrupted — the
+/// standing 09:00 meeting, the school run. Snacks are planned around it.
+model BusyBlock {
+  id       String  @id @default(cuid())
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Weekdays as a bitmask, Monday = 1 through Sunday = 64.
+  days     Int
+  /// Minutes since local midnight.
+  startMin Int
+  endMin   Int
+  label    String?
+
+  @@index([userId])
 }

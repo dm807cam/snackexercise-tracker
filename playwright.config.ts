@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { STATE } from "./e2e/fixtures";
 
 /**
  * The pre-installed browser in some environments is a different build to the
@@ -19,6 +20,16 @@ export default defineConfig({
     ...devices["Pixel 7"],
     ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
+  projects: [
+    // Creates the first admin through /setup and saves the session.
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "app",
+      dependencies: ["setup"],
+      testIgnore: /auth\.setup\.ts/,
+      use: { storageState: STATE },
+    },
+  ],
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {

@@ -92,6 +92,18 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /*
+    One over-wide element must never widen the whole page: on a phone that
+    silently stretches the layout viewport, and every full-screen overlay —
+    the snack player among them — is then wider than the screen it is on.
+    `clip` rather than `hidden`, so no scroll container is created and
+    nothing that sticks stops sticking.
+  */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   body {
     background: var(--bg);
     color: var(--text);

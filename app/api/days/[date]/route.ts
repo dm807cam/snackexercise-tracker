@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { handle } from "@/lib/api";
+import { authenticate } from "@/lib/auth/guard";
 import { prisma } from "@/lib/db";
 import { getDaySummary } from "@/lib/queries";
 import { getAppConfig } from "@/lib/app-config";
@@ -9,22 +10,21 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ date: string }> };
 
-export async function GET(_request: NextRequest, { params }: Ctx) {
+export async function GET(request: NextRequest, { params }: Ctx) {
   return handle(async () => {
+    const { user } = await authenticate(request, { scope: "read" });
     const { date } = await params;
-    const { timeZone, today } = await getAppConfig();
-    return getDaySummary(localDateSchema.parse(date), timeZone, today);
+    const { timeZone, today } = await getAppConfig(user.id);
+    return getDaySummary(user.id, localDateSchema.parse(date), timeZone, today);
   });
 }
 
 /** Clear a whole day. Behind a confirmation in the UI. */
-export async function DELETE(_request: NextRequest, { params }: Ctx) {
-  const { date } = await params;
-  const parsed = localDateSchema.safeParse(date);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid date" }, { status: 400 });
-  }
-  const removed = await prisma.setEntry.findMany({ where: { localDate: parsed.data } });
-  await prisma.setEntry.deleteMany({ where: { localDate: parsed.data } });
-  return NextResponse.json({ deleted: removed.length });
+export async function DELETE(request: NextRequest, { params }: Ctx) {
+  return handle(async () => {
+    const { user } = await authenticate(request, { scope: "entries:write" });
+    const localDate = localDateSchema.parse((await params).date);
+    const { count } = await prisma.setEntry.deleteMany({ where: { userId: user.id, localDate } });
+    return { deleted: count };
+  });
 }
