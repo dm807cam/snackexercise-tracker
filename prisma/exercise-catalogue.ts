@@ -647,8 +647,8 @@ export const EXERCISE_CATALOGUE: CatalogueEntry[] = [
   {
     name: "Stair climb", category: "cardio", bodyweight: true, cardioBias: 1, mets: 9,
     muscles: { quads: 0.25, glutes: 0.25, calves: 0.25 },
-    snack: { equipment: "stairs", impact: 1, floor: false, sweat: 1, seconds: 60,
-      cues: ["Every step, not every other; drive through the whole foot", "Hard enough that talking is awkward by the top", "Walk back down — that is the rest"] },
+    snack: { equipment: "stairs", impact: 1, floor: false, sweat: 0, seconds: 30,
+      cues: ["Every step, not every other; drive through the whole foot", "Brisk rather than flat out — you arrive at the meeting warm, not wet", "Walk back down — that is the rest"] },
   },
   {
     name: "Stair sprint", category: "cardio", bodyweight: true, cardioBias: 1, mets: 12,

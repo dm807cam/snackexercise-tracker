@@ -89,8 +89,11 @@ export interface Suggestion {
   nudge: string | null;
 }
 
+/** The parts of an axis's statistics the ranking reads. */
+export type AxisNeedStat = Pick<AxisStat, "axis" | "daysSinceTrained" | "perWeek" | "targetPerWeek">;
+
 export function rankAxes(params: {
-  axes: readonly AxisStat[];
+  axes: readonly AxisNeedStat[];
   daysSinceCardio: number | null;
   /** From the balance breakdown; decides how thin the cardio side is. */
   cardioMetMinutesPerWeek: number;

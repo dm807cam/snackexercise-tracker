@@ -2,7 +2,8 @@ import { z } from "zod";
 import { MUSCLE_SLUGS } from "./muscles";
 import { isValidLocalDate } from "./dates";
 import { EFFORT_LEVELS } from "./effort";
-import { isEquipmentSlug, parseRequirements } from "./snack/equipment";
+import { EQUIPMENT_SLUGS, isEquipmentSlug, parseRequirements } from "./snack/equipment";
+import { CONTEXT_KINDS } from "./snack/contexts";
 
 export const localDateSchema = z.string().refine(isValidLocalDate, {
   message: "Expected a valid YYYY-MM-DD date",
@@ -222,4 +223,14 @@ export const settingsSchema = z.object({
    */
   birthYear: z.string().max(4).optional(),
   restingHr: z.string().max(3).optional(),
+});
+
+/** A place the user trains, as the Places editor sends it. */
+export const contextFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  kind: z.enum(CONTEXT_KINDS as [string, ...string[]]),
+  equipment: z.array(z.enum(EQUIPMENT_SLUGS as [string, ...string[]])).max(EQUIPMENT_SLUGS.length),
+  quiet: z.boolean(),
+  floor: z.boolean(),
+  sweat: z.number().int().min(0).max(2),
 });
