@@ -223,6 +223,10 @@ export const settingsSchema = z.object({
    */
   birthYear: z.string().max(4).optional(),
   restingHr: z.string().max(3).optional(),
+  /** Nudge preferences; see lib/snack/nudge-settings.ts. */
+  nudgeFollowUp: z.enum(["on", "off", ""]).optional(),
+  nudgeMaxPerDay: z.string().regex(/^(|[1-9]|1\d|2[0-4])$/).optional(),
+  nudgeDays: z.string().regex(/^(|\d{1,3})$/).optional(),
   /** The length the snack card opens on, in minutes. */
   snackMinutes: z.string().regex(/^(|[1-9]|1\d|20)$/).optional(),
 });

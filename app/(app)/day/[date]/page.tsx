@@ -13,6 +13,7 @@ import { getAppConfig } from "@/lib/app-config";
 import { requireUser } from "@/lib/auth/current";
 import { spacingNudge } from "@/lib/suggest";
 import { getContexts, previewSnack, snacksOn } from "@/lib/snack/service";
+import { todaySchedule } from "@/lib/snack/schedule-service";
 import { MAX_SNACK_MINUTES, MIN_SNACK_MINUTES } from "@/lib/snack/planner";
 
 export const dynamic = "force-dynamic";
@@ -43,12 +44,13 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         ? stored
         : DEFAULT_SNACK_MINUTES;
 
-    const [{ contexts, activeId }, preview, snacks, activeWindow, targetBouts] = await Promise.all([
+    const [{ contexts, activeId }, preview, snacks, activeWindow, targetBouts, schedule] = await Promise.all([
       getContexts(user.id),
       previewSnack(user.id, { minutes, focus: "auto", nonce: 0 }),
       snacksOn(user.id, config.today),
       getActiveWindow(user.id),
       getTargetBouts(user.id),
+      todaySchedule(user.id),
     ]);
 
     snack = {
@@ -63,6 +65,15 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         targetBouts,
       }),
       resumable: snacks.find((s) => s.status === "started") ?? null,
+      upcoming: {
+        times: schedule.slots.map((slot) => slot.time),
+        done: schedule.done,
+        target: schedule.targetBouts,
+        dueNow: schedule.dueNow,
+        nudgesOn: schedule.nudges.activeToday,
+        nudgesEnabled: schedule.nudges.enabled,
+        pausedUntil: schedule.nudges.pausedUntil,
+      },
     };
   }
 

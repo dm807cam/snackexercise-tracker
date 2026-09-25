@@ -16,7 +16,7 @@ import { formatSets, type Units } from "@/lib/format";
 import type { MuscleSlug } from "@/lib/muscles";
 import type { MuscleTotals } from "@/lib/scoring";
 import { buildDailyGoal } from "@/lib/daily-goal";
-import { SnackNow, type PlaceOption } from "@/components/Snack/SnackNow";
+import { SnackNow, type PlaceOption, type Upcoming } from "@/components/Snack/SnackNow";
 import { SnackPlayer } from "@/components/Snack/SnackPlayer";
 import type { SnackPlan } from "@/lib/snack/types";
 import type { SnackView } from "@/lib/snack/service";
@@ -53,6 +53,7 @@ export interface SnackCardData {
   defaultMinutes: number;
   nudge: string | null;
   resumable: SnackView | null;
+  upcoming: Upcoming;
 }
 
 export function DayView({
@@ -244,6 +245,7 @@ export function DayView({
           defaultMinutes={snack.defaultMinutes}
           nudge={snack.nudge}
           resumable={snack.resumable}
+          upcoming={snack.upcoming}
           onStart={setPlaying}
           onPick={(exerciseId) => {
             setPreselect(exerciseId);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import { Toast, type ToastState } from "@/components/Toast";
@@ -39,11 +39,20 @@ import {
 } from "@/lib/spacing";
 import type { ExerciseOption } from "@/components/QuickAdd/types";
 import { Sheet } from "@/components/Sheet";
+import type { TodaySchedule } from "@/lib/snack/schedule-service";
 import { ModelPicker } from "./ModelPicker";
+import { AccountSection } from "./AccountSection";
+import { NudgesSection } from "./NudgesSection";
+import { PlacesSection, type PlaceRow } from "./PlacesSection";
+import { TokensSection } from "./TokensSection";
+import { Field, Section } from "./ui";
 
 export function SettingsView({
   initial,
   exercises,
+  user,
+  places,
+  schedule,
 }: {
   initial: {
     units: Units;
@@ -63,6 +72,9 @@ export function SettingsView({
     physiology: Physiology;
   };
   exercises: ExerciseOption[];
+  user: { email: string; name: string | null; role: string };
+  places: { contexts: PlaceRow[]; activeId: string | null };
+  schedule: TodaySchedule;
 }) {
   const router = useRouter();
   const [units, setUnits] = useState<Units>(initial.units);
@@ -220,10 +232,18 @@ export function SettingsView({
   }
 
   const custom = exercises.filter((e) => e.isCustom);
+  const toastFrom = useCallback(
+    (message: string, tone?: "error") => setToast({ message, ...(tone ? { tone } : {}) }),
+    [],
+  );
 
   return (
     <div className="pb-6">
       <h1 className="pt-4 pb-3 text-lg font-semibold">Settings</h1>
+
+      <PlacesSection initial={places} onToast={toastFrom} />
+
+      <NudgesSection initial={schedule} onToast={toastFrom} />
 
       <Section title="Units and time">
         <Field label="Weight units">
@@ -706,6 +726,10 @@ export function SettingsView({
         </div>
       </Section>
 
+      <TokensSection onToast={toastFrom} />
+
+      <AccountSection user={user} onToast={toastFrom} />
+
       <MuscleEditor
         exercise={editing}
         onClose={() => setEditing(null)}
@@ -846,49 +870,5 @@ function HourSelect({
         </option>
       ))}
     </select>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold">{title}</h2>
-      <div className="surface flex flex-col gap-4 rounded-xl p-4">{children}</div>
-    </section>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  /**
-   * The id of the control this labels, where there is exactly one.
-   *
-   * A real <label> rather than a paragraph, so the control has an accessible
-   * name: a bare number input reads as "edit text, blank" to a screen reader,
-   * and the words sitting above it are not attached to it in any way a
-   * assistive technology can follow. Optional because some fields wrap a group
-   * of controls, which carry their own aria-labels.
-   */
-  htmlFor?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      {htmlFor ? (
-        <label className="mb-2 block text-sm font-medium" htmlFor={htmlFor}>
-          {label}
-        </label>
-      ) : (
-        <p className="mb-2 text-sm font-medium">{label}</p>
-      )}
-      {children}
-      {hint && <p className="mt-2 text-xs text-dim">{hint}</p>}
-    </div>
   );
 }

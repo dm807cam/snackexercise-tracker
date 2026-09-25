@@ -15,6 +15,21 @@ export interface PlaceOption {
 
 type Focus = "auto" | "strength" | "cardio";
 
+/** The rest of today's plan, as the nudge job sees it (lib/snack/schedule-service.ts). */
+export interface Upcoming {
+  /** "HH:MM", in order. Empty when the day's target is met or nothing more fits. */
+  times: string[];
+  done: number;
+  target: number;
+  /** The first of `times` has already come. */
+  dueNow: boolean;
+  /** Nudges will come today: switched on for a device, and today is one of their days. */
+  nudgesOn: boolean;
+  /** Switched on at all; false means there is something to offer. */
+  nudgesEnabled: boolean;
+  pausedUntil: string | null;
+}
+
 export const MINUTE_OPTIONS = [1, 2, 3, 5, 10] as const;
 
 /**
@@ -33,6 +48,7 @@ export function SnackNow({
   defaultMinutes,
   nudge,
   resumable,
+  upcoming,
   onStart,
   onPick,
   onError,
@@ -45,6 +61,7 @@ export function SnackNow({
   nudge: string | null;
   /** A snack started earlier and not finished. */
   resumable: SnackView | null;
+  upcoming: Upcoming;
   onStart: (snack: SnackView) => void;
   /** Log one of the planned movements by hand instead. */
   onPick: (exerciseId: string) => void;
@@ -230,7 +247,34 @@ export function SnackNow({
           Something else
         </button>
       </div>
+
+      <UpcomingLine upcoming={upcoming} />
     </section>
+  );
+}
+
+/** One line under the card: when the next snack is planned, and whether anything will say so. */
+function UpcomingLine({ upcoming }: { upcoming: Upcoming }) {
+  const paused = upcoming.pausedUntil ? new Date(upcoming.pausedUntil) : null;
+  const next = upcoming.times[0];
+  let text: string;
+  if (upcoming.done >= upcoming.target) text = `All ${upcoming.target} snacks done today.`;
+  else if (!next) text = "Nothing more fits in today's waking hours.";
+  else if (upcoming.dueNow && !paused)
+    text = `A snack is due now${upcoming.times[1] ? `; the one after around ${upcoming.times[1]}` : ""}.`;
+  else if (paused && upcoming.nudgesOn)
+    text = `Nudges paused until ${paused.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}; next snack planned around ${next}.`;
+  else text = `${upcoming.nudgesOn ? "Next nudge" : "Next snack planned"} around ${next}.`;
+
+  return (
+    <p className="mt-2 text-xs text-dim">
+      {text}{" "}
+      {!upcoming.nudgesEnabled && upcoming.done < upcoming.target && (
+        <Link href="/settings#nudges" className="underline" style={{ color: "var(--accent)" }}>
+          Get nudged
+        </Link>
+      )}
+    </p>
   );
 }
 

@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/BottomNav";
+import { ServiceWorker } from "@/components/ServiceWorker";
 import { requireUser } from "@/lib/auth/current";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
       <BottomNav />
+      <ServiceWorker />
     </>
   );
 }
