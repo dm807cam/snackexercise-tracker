@@ -64,8 +64,8 @@ jobs:
 
       # Bundled separately from the app and only ever exercised inside the
       # container, so a break here would otherwise surface at deploy time.
-      - name: Build the seed bundle
-        run: npm run build:seed
+      - name: Build the seed and admin CLI bundles
+        run: npm run build:scripts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -109,17 +109,31 @@ jobs:
       - name: Start it and check it serves
         run: |
           docker run -d --name snacktest -p 3000:3000 \
-            -e TZ=Europe/Berlin -v snackdata:/data snackexercise-tracker:ci
+            -e TZ=Europe/Berlin -v snackdata:/data \
+            -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='a long ci passphrase' \
+            snackexercise-tracker:ci
 
           for _ in $(seq 1 45); do
-            if curl -fsS http://localhost:3000/api/health > /tmp/health.json; then
-              echo "healthy: $(cat /tmp/health.json)"
-              # Migrations and the seed run at start-up; an empty catalogue
-              # means one of them silently did nothing.
-              count=$(curl -fsS http://localhost:3000/api/exercises \
+            # Ready, not just up: migrated to this build's newest migration,
+            # none failed half-way, and the seed filled the catalogue.
+            if curl -fsS http://localhost:3000/api/ready > /tmp/ready.json; then
+              echo "ready: $(cat /tmp/ready.json)"
+
+              # The seed created the admin from the environment, and the
+              # account works end to end: sign in, then read with the session.
+              curl -fsS -c /tmp/jar -H 'origin: http://localhost:3000' -H 'content-type: application/json' \
+                -d '{"email":"ci@example.com","password":"a long ci passphrase"}' \
+                http://localhost:3000/api/auth/login > /dev/null
+              count=$(curl -fsS -b /tmp/jar http://localhost:3000/api/exercises \
                 | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["exercises"]))')
-              echo "catalogue: $count exercises"
+              echo "catalogue as the admin sees it: $count exercises"
               test "$count" -gt 0
+
+              # Without a session the data is not there to read.
+              test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/exercises)" = 401
+
+              # The operator CLI runs inside the image.
+              docker exec snacktest node dist/admin.mjs list | grep -q ci@example.com
               exit 0
             fi
             sleep 2

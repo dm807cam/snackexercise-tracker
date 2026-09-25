@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { audit } from "@/lib/audit";
+import { count } from "@/lib/metrics";
 import { prisma } from "@/lib/db";
 import { burnPasswordCheck, hashPassword, needsRehash, verifyPassword } from "@/lib/auth/password";
 import { emailSchema } from "@/lib/auth/accounts";
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     const blocked = results.find((r) => !r.allowed);
     if (blocked) {
       await audit("auth.login_throttled", { request, detail: { email } });
+      count("snack_logins_total", { result: "throttled" });
       throw new ApiError(
         "Too many sign-in attempts. Wait a few minutes and try again.",
         429,
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
         request,
         detail: { email, reason: !user ? "no-account" : !ok ? "password" : "disabled" },
       });
+      count("snack_logins_total", { result: "failed" });
       throw new ApiError("Email or password is incorrect", 401, "bad-credentials");
     }
 
@@ -82,6 +85,7 @@ export async function POST(request: NextRequest) {
     if (ip) await clearRateLimit(`login:pair:${ip}:${email}`);
 
     await audit("auth.login", { actorId: user.id, request });
+    count("snack_logins_total", { result: "ok" });
     return signIn(request, user);
   });
 }

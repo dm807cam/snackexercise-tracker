@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { log } from "./logger";
+import { count } from "./metrics";
 
 /** Consistent error envelope, so the client can always read `error`. */
 export function apiError(
@@ -39,6 +40,7 @@ export async function handle<T>(fn: () => Promise<T>): Promise<NextResponse | Re
       return apiError("The request body is not valid JSON", 400);
     }
     log.error("unhandled route error", { error });
+    count("snack_api_unhandled_errors_total");
     return apiError("Unexpected server error", 500);
   }
 }

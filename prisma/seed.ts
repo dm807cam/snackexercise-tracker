@@ -13,7 +13,7 @@
  *      and — for an unattended first boot — the first admin account.
  */
 
-import { prisma } from "../lib/db";
+import { disconnectDatabase, prisma } from "../lib/db";
 import { CARDIO_BIAS_BACKFILL, EXERCISE_CATALOGUE, type CatalogueEntry } from "./exercise-catalogue";
 import { slugify } from "../lib/slug";
 
@@ -140,6 +140,4 @@ main()
     console.error(err);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => disconnectDatabase());

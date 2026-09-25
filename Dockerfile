@@ -31,8 +31,11 @@ ENV DATABASE_URL="file:/data/app.db"
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx prisma generate \
  && npm run build \
- # Bundle the seed to plain JS so the runtime needs no TypeScript loader.
- && npm run build:seed
+ # Bundle the seed and the admin CLI to plain JS, so the runtime needs no
+ # TypeScript loader. Everything but the Prisma runtime and the native SQLite
+ # driver is bundled in: the standalone server's traced node_modules carry
+ # those two, and nothing else can be assumed to be there.
+ && npm run build:scripts
 
 # ---- runtime -------------------------------------------------------------
 FROM node:22-alpine AS runtime
@@ -54,7 +57,7 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=build /app/prisma/migrations ./prisma/migrations
 COPY --from=build /app/prisma.config.mjs ./prisma.config.mjs
-COPY --from=build /app/dist/seed.mjs ./dist/seed.mjs
+COPY --from=build /app/dist/seed.mjs /app/dist/admin.mjs ./dist/
 COPY --from=build /app/generated ./generated
 
 # Overlaid on the standalone bundle's traced modules. The bundle already

@@ -26,6 +26,7 @@ const HELP: Record<string, string> = {
   snack_push_deliveries_total: "Web Push deliveries by result.",
   snack_scheduler_ticks_total: "Scheduler ticks, by job and result.",
   snack_scheduler_tick_seconds: "Duration of the last scheduler tick, by job.",
+  snack_api_unhandled_errors_total: "API requests that failed with an unexpected server error.",
 };
 
 function key(labels: Labels): string {
@@ -61,8 +62,14 @@ export function renderMetrics(extra: { name: string; help: string; value: number
     lines.push(`# HELP ${name} ${f.help}`, `# TYPE ${name} ${f.type}`);
     for (const [labels, value] of f.values) lines.push(`${name}${labels ? `{${labels}}` : ""} ${value}`);
   }
+  // One HELP and TYPE per family however many label sets it has: a repeated
+  // TYPE line makes the whole scrape invalid.
+  const described = new Set<string>();
   for (const g of extra) {
-    lines.push(`# HELP ${g.name} ${g.help}`, `# TYPE ${g.name} gauge`);
+    if (!described.has(g.name)) {
+      described.add(g.name);
+      lines.push(`# HELP ${g.name} ${g.help}`, `# TYPE ${g.name} gauge`);
+    }
     const labels = g.labels ? key(g.labels) : "";
     lines.push(`${g.name}${labels ? `{${labels}}` : ""} ${g.value}`);
   }

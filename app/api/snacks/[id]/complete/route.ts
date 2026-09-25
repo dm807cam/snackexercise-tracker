@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { handle } from "@/lib/api";
 import { authenticate } from "@/lib/auth/guard";
 import { completeSnack, completionSchema } from "@/lib/snack/service";
+import { count } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   return handle(async () => {
     const { user } = await authenticate(request, { scope: "entries:write" });
     const { results } = completionSchema.parse(await request.json());
-    return completeSnack(user.id, (await params).id, results);
+    const result = await completeSnack(user.id, (await params).id, results);
+    count("snack_snacks_finished_total", { outcome: "completed" });
+    return result;
   });
 }

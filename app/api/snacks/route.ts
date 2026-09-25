@@ -4,6 +4,7 @@ import { authenticate } from "@/lib/auth/guard";
 import { getAppConfig } from "@/lib/app-config";
 import { localDateSchema } from "@/lib/validation";
 import { createSnack, snackRequestSchema, snacksOn } from "@/lib/snack/service";
+import { count } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
     const { user } = await authenticate(request, { scope: "entries:write" });
     const body = await request.json().catch(() => ({}));
     const snack = await createSnack(user.id, snackRequestSchema.parse(body ?? {}));
+    count("snack_snacks_planned_total", { trigger: "app" });
     return { snack };
   });
 }
