@@ -13,6 +13,8 @@
  *      and — for an unattended first boot — the first admin account.
  */
 
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { disconnectDatabase, prisma } from "../lib/db";
 import { CARDIO_BIAS_BACKFILL, EXERCISE_CATALOGUE, type CatalogueEntry } from "./exercise-catalogue";
 import { slugify } from "../lib/slug";
@@ -32,7 +34,7 @@ function profileColumns(item: CatalogueEntry) {
   };
 }
 
-async function seedCatalogue() {
+export async function seedCatalogue({ quiet = false }: { quiet?: boolean } = {}) {
   let created = 0;
   let described = 0;
 
@@ -82,6 +84,7 @@ async function seedCatalogue() {
     backfilled += count;
   }
 
+  if (quiet) return;
   console.log(
     `Seed: ${created} exercise(s) added, ${EXERCISE_CATALOGUE.length - created} already present` +
       `${described > 0 ? `, ${described} given a snack profile` : ""}` +
@@ -89,7 +92,7 @@ async function seedCatalogue() {
   );
 }
 
-async function seedInstance() {
+export async function seedInstance() {
   // A key supplied by environment becomes the instance's SHARED key on first
   // run — shared because a container-level variable was never one person's.
   // After that the admin console owns it, so this never overwrites a choice.
@@ -135,9 +138,14 @@ async function main() {
   await seedInstance();
 }
 
-main()
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  })
-  .finally(() => disconnectDatabase());
+// Run when executed (node dist/seed.mjs, tsx prisma/seed.ts); the integration
+// tests import the steps instead.
+const executed = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (executed) {
+  main()
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    })
+    .finally(() => disconnectDatabase());
+}

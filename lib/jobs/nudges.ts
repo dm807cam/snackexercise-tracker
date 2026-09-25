@@ -73,7 +73,11 @@ export async function nudgeUser(userId: string, now: Date = new Date()): Promise
   // replica, or an overlapping tick, loses the insert and sends nothing.
   let nudgeId: string;
   try {
-    const nudge = await prisma.nudge.create({ data: { userId, localDate: today, slot: due.slot, attempt: due.attempt } });
+    // Stamped with the same `now` every decision above was made against, so
+    // the follow-up and snooze arithmetic reads back exactly what was decided.
+    const nudge = await prisma.nudge.create({
+      data: { userId, localDate: today, slot: due.slot, attempt: due.attempt, sentAt: now },
+    });
     nudgeId = nudge.id;
   } catch {
     return "claimed-elsewhere";
