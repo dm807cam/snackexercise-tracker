@@ -15,7 +15,7 @@ export async function DELETE(request: NextRequest, { params }: Ctx) {
     const { id } = await params;
     const { count } = await prisma.authLink.deleteMany({ where: { id, purpose: "invite", usedAt: null } });
     if (count === 0) throw notFound("Invitation");
-    await audit("admin.settings_updated", { actorId: actor.id, request, detail: { withdrewInvite: id } });
+    await audit("admin.invite_withdrawn", { actorId: actor.id, request, detail: { inviteId: id } });
     return { deleted: true };
   });
 }

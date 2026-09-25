@@ -31,6 +31,7 @@ export type AuditAction =
   | "account.exported"
   | "account.imported"
   | "admin.invite_created"
+  | "admin.invite_withdrawn"
   | "admin.reset_link_created"
   | "admin.user_updated"
   | "admin.user_deleted"
