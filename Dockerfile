@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- dependencies (all, for building) ------------------------------------
-FROM node:22-alpine AS deps
+FROM node:25-alpine AS deps
 WORKDIR /app
 # better-sqlite3 is a native module and may need to compile on this platform.
 RUN apk add --no-cache libc6-compat python3 make g++
@@ -15,13 +15,13 @@ RUN npm ci
 # and a full `npm ci --omit=dev` drags in ~900MB, most of it the build-only
 # @next/swc binaries and a second copy of Next that the standalone bundle
 # already contains. This stage is the CLI and nothing else.
-FROM node:22-alpine AS migrate-cli
+FROM node:25-alpine AS migrate-cli
 WORKDIR /cli
 RUN npm init -y >/dev/null \
  && npm install --omit=dev --ignore-scripts prisma@7.10.0
 
 # ---- build ---------------------------------------------------------------
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY --from=deps /app/node_modules ./node_modules
@@ -38,7 +38,7 @@ RUN npx prisma generate \
  && npm run build:scripts
 
 # ---- runtime -------------------------------------------------------------
-FROM node:22-alpine AS runtime
+FROM node:25-alpine AS runtime
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 
