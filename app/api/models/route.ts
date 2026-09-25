@@ -1,18 +1,21 @@
+import { NextRequest } from "next/server";
 import { handle } from "@/lib/api";
+import { authenticate } from "@/lib/auth/guard";
 import { fetchModels, RECOMMENDED_MODEL_IDS, type ModelOption } from "@/lib/openrouter";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The catalogue changes on the order of weeks, and this is a personal tracker
- * that will ask for it a handful of times a year. An in-process cache is
+ * The catalogue changes on the order of weeks, and Settings asks for it a
+ * handful of times a year per person. An in-process cache is
  * enough; it costs nothing and dies with the container.
  */
 const TTL_MS = 12 * 60 * 60 * 1000;
 let cache: { at: number; models: ModelOption[] } | null = null;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   return handle(async () => {
+    await authenticate(request, { sessionOnly: true });
     if (cache && Date.now() - cache.at < TTL_MS) {
       return { models: cache.models, recommended: RECOMMENDED_MODEL_IDS, stale: false };
     }

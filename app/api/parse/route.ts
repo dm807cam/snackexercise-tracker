@@ -1,11 +1,14 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { authenticate } from "@/lib/auth/guard";
+import { getAppConfig, openRouterKeyFor } from "@/lib/app-config";
 import { getExercises, getSetting } from "@/lib/queries";
 import { DEFAULT_MODEL, OpenRouterError, parseWorkoutText, suggestMuscles } from "@/lib/openrouter";
+import { hitRateLimit } from "@/lib/rate-limit";
 import { slugify } from "@/lib/slug";
 import { localDateSchema } from "@/lib/validation";
-import { formatTime, todayLocalDate } from "@/lib/dates";
+import { formatTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -46,17 +49,31 @@ export interface ProposedEntry {
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
+    const { user } = await authenticate(request, { scope: "entries:write" });
     const { text, date } = requestSchema.parse(await request.json());
 
-    const apiKey = await getSetting("openrouterKey");
+    const apiKey = await openRouterKeyFor(user.id);
     if (!apiKey) {
       throw new ApiError(
         "No OpenRouter API key configured. Add one in Settings to use voice entry.",
         412,
       );
     }
-    const model = (await getSetting("openrouterModel")) ?? DEFAULT_MODEL;
-    const exercises = await getExercises();
+
+    // Every call spends somebody's credit — possibly a key the admin shared —
+    // so it is metered per person. Sixty an hour is far beyond dictating sets.
+    const limit = await hitRateLimit(`parse:${user.id}`, 60, 60 * 60);
+    if (!limit.allowed) {
+      throw new ApiError("That is a lot of dictation for one hour. Try again shortly.", 429, "rate-limited", {
+        "retry-after": String(limit.retryAfterSec),
+      });
+    }
+
+    const [model, exercises, { timeZone, today }] = await Promise.all([
+      getSetting(user.id, "openrouterModel").then((m) => m ?? DEFAULT_MODEL),
+      getExercises(user.id),
+      getAppConfig(user.id),
+    ]);
 
     let parsed;
     try {
@@ -65,7 +82,7 @@ export async function POST(request: NextRequest) {
         model,
         text,
         knownExercises: exercises.map((e) => e.name),
-        localTime: formatTime(new Date()),
+        localTime: formatTime(new Date(), timeZone),
       });
     } catch (error) {
       if (error instanceof OpenRouterError) throw new ApiError(error.message, error.status);
@@ -73,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     const bySlug = new Map(exercises.map((e) => [e.slug, e]));
-    const targetDate = date ?? todayLocalDate();
+    const targetDate = date ?? today;
 
     const proposals: ProposedEntry[] = [];
     for (const entry of parsed.entries) {

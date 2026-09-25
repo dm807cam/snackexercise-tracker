@@ -1,26 +1,33 @@
 /**
- * Entry creation, shared by the manual add form and the LLM confirm flow so
- * both go through exactly the same validation and exercise resolution.
+ * Entry creation, shared by the manual add form, the LLM confirm flow and the
+ * guided snack player, so all three go through exactly the same validation and
+ * exercise resolution.
  */
 
-import { prisma } from "./db";
+import { prisma, type TransactionClient } from "./db";
 import { ApiError } from "./api";
 import { slugify } from "./slug";
 import { toLocalDateInZone, zonedDateTimeToInstant } from "./dates";
-import { getAppConfig } from "./app-config";
+import { findVisibleExercise, findVisibleExerciseBySlug } from "./queries";
 import type { z } from "zod";
 import type { entryInputSchema } from "./validation";
 
 export type EntryInput = z.infer<typeof entryInputSchema>;
 
+type Db = typeof prisma | TransactionClient;
+
 /**
  * Resolve an entry to an exercise id, creating a custom exercise if the name is
  * new. A new exercise needs a muscle mapping — without one the entry could
  * never contribute to the body map or radar, which is the whole point.
+ *
+ * Only movements this user can see resolve: the shared catalogue and their own.
+ * An id belonging to someone else's custom movement is "unknown", exactly as if
+ * it did not exist.
  */
-async function resolveExerciseId(input: EntryInput): Promise<string> {
+async function resolveExerciseId(userId: string, input: EntryInput, db: Db): Promise<string> {
   if (input.exerciseId) {
-    const found = await prisma.exercise.findUnique({ where: { id: input.exerciseId } });
+    const found = await findVisibleExercise(userId, input.exerciseId);
     if (!found) throw new ApiError("Unknown exercise", 404);
     return found.id;
   }
@@ -29,7 +36,7 @@ async function resolveExerciseId(input: EntryInput): Promise<string> {
   const slug = slugify(name);
   if (!slug) throw new ApiError("Exercise name must contain letters or numbers");
 
-  const existing = await prisma.exercise.findUnique({ where: { slug } });
+  const existing = await findVisibleExerciseBySlug(userId, slug);
   if (existing) return existing.id;
 
   if (!input.muscles?.length) {
@@ -39,8 +46,9 @@ async function resolveExerciseId(input: EntryInput): Promise<string> {
     );
   }
 
-  const created = await prisma.exercise.create({
+  const created = await db.exercise.create({
     data: {
+      ownerId: userId,
       name,
       slug,
       // A new movement that is mostly aerobic is filed as cardio, so the manual
@@ -55,12 +63,24 @@ async function resolveExerciseId(input: EntryInput): Promise<string> {
   return created.id;
 }
 
-export async function createEntry(input: EntryInput) {
-  const exerciseId = await resolveExerciseId(input);
+export const entryExerciseSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  bodyweight: true,
+  cardioBias: true,
+  mets: true,
+  muscles: { select: { muscle: true, weight: true } },
+} as const;
 
-  // performedAt drives ordering within the day; localDate drives which day it
-  // belongs to. If only one is given, derive the other rather than guessing.
-  const { timeZone } = await getAppConfig();
+export async function createEntry(
+  userId: string,
+  timeZone: string,
+  input: EntryInput,
+  options: { snackId?: string | null; source?: string; db?: Db } = {},
+) {
+  const db = options.db ?? prisma;
+  const exerciseId = await resolveExerciseId(userId, input, db);
 
   // The day the time belongs to. The two are independently optional on the
   // wire, so a time sent without a day means today — requiring both would
@@ -80,8 +100,9 @@ export async function createEntry(input: EntryInput) {
       ? new Date(input.performedAt)
       : new Date();
 
-  return prisma.setEntry.create({
+  return db.setEntry.create({
     data: {
+      userId,
       exerciseId,
       performedAt,
       localDate,
@@ -93,20 +114,9 @@ export async function createEntry(input: EntryInput) {
       avgHeartRate: input.avgHeartRate ?? null,
       effort: input.effort ?? null,
       notes: input.notes ?? null,
-      source: input.source,
+      source: options.source ?? input.source,
+      snackId: options.snackId ?? null,
     },
-    include: {
-      exercise: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          bodyweight: true,
-          cardioBias: true,
-          mets: true,
-          muscles: { select: { muscle: true, weight: true } },
-        },
-      },
-    },
+    include: { exercise: { select: entryExerciseSelect } },
   });
 }

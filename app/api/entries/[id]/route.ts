@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { ApiError, handle } from "@/lib/api";
+import { handle, notFound } from "@/lib/api";
+import { authenticate } from "@/lib/auth/guard";
 import { prisma } from "@/lib/db";
+import { entryExerciseSelect } from "@/lib/entries";
 import { entryUpdateSchema } from "@/lib/validation";
 import { formatTime, toLocalDateInZone, zonedDateTimeToInstant } from "@/lib/dates";
 import { getAppConfig } from "@/lib/app-config";
@@ -12,18 +13,20 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   return handle(async () => {
+    const { user } = await authenticate(request, { scope: "entries:write" });
     const { id } = await params;
     const patch = entryUpdateSchema.parse(await request.json());
 
-    const existing = await prisma.setEntry.findUnique({ where: { id } });
-    if (!existing) throw new ApiError("Entry not found", 404);
+    // Scoped by owner: somebody else's entry id is simply not found.
+    const existing = await prisma.setEntry.findFirst({ where: { id, userId: user.id } });
+    if (!existing) throw notFound("Entry");
 
-    const { timeZone } = await getAppConfig();
+    const { timeZone } = await getAppConfig(user.id);
     const { performedTime, performedAt: patchedInstant, localDate: patchedDate, ...fields } = patch;
 
     // Retiming an entry — the run you did at 06:30 and only logged at 21:00 —
     // arrives as the digits the user typed plus the day they belong to, and is
-    // resolved against the app's configured zone rather than the browser's.
+    // resolved against the user's configured zone rather than the browser's.
     //
     // Either half may arrive alone. A day on its own moves the entry to that
     // day at the clock time it already had, which is the only reading of
@@ -42,7 +45,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
     return {
       entry: await prisma.setEntry.update({
-        where: { id },
+        where: { id: existing.id },
         data: {
           ...fields,
           performedAt,
@@ -54,32 +57,21 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
               ? toLocalDateInZone(performedAt, timeZone)
               : undefined,
         },
-        include: {
-          exercise: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              bodyweight: true,
-              cardioBias: true,
-              mets: true,
-              muscles: { select: { muscle: true, weight: true } },
-            },
-          },
-        },
+        include: { exercise: { select: entryExerciseSelect } },
       }),
     };
   });
 }
 
-export async function DELETE(_request: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const existing = await prisma.setEntry.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-  }
-  await prisma.setEntry.delete({ where: { id } });
-  // Return the deleted row so the client can offer a genuine undo rather than
-  // just hiding it optimistically.
-  return NextResponse.json({ deleted: existing });
+export async function DELETE(request: NextRequest, { params }: Ctx) {
+  return handle(async () => {
+    const { user } = await authenticate(request, { scope: "entries:write" });
+    const { id } = await params;
+    const existing = await prisma.setEntry.findFirst({ where: { id, userId: user.id } });
+    if (!existing) throw notFound("Entry");
+    await prisma.setEntry.delete({ where: { id: existing.id } });
+    // Return the deleted row so the client can offer a genuine undo rather than
+    // just hiding it optimistically.
+    return { deleted: existing };
+  });
 }
